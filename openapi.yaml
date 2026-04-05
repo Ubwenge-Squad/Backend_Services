@@ -5,7 +5,7 @@ info:
   description: >
     REST API for Intore AI Screening. Covers authentication, jobs, applicants,
     resumes, applications, AI screening orchestration (Gemini), results, bias audits, and
-    external CSV ingestion. Schemas mirror the Mongoose models in `Backend_Services/models`.
+    external CSV ingestion.
 servers:
   - url: https://api.example.com
     description: Production
@@ -20,6 +20,7 @@ tags:
   - name: Screening
   - name: Bias Audits
   - name: Ingestion
+  - name: Verification
 paths:
   /auth/register:
     post:
@@ -38,6 +39,55 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /auth/verify:
+    post:
+      tags: [Verification]
+      summary: Verify a newly registered account
+      description: Accepts a one-time verification code or token sent to the user's email/SMS.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+      responses:
+        '200':
+          description: Account verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/resend-code:
+    post:
+      tags: [Verification]
+      summary: Resend a verification code to email/SMS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, purpose]
+              properties:
+                email: { type: string, format: email }
+                purpose:
+                  type: string
+                  enum: [register, reset_password]
+      responses:
+        '200':
+          description: Code reissued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
         '400':
           $ref: '#/components/responses/BadRequest'
   /auth/login:
@@ -626,6 +676,24 @@ components:
         role:
           type: string
           enum: [applicant, recruiter, admin]
+        phoneNumber: { type: string }
+        avatarUrl: { type: string }
+        # Optional flags for future-proofing
+        isActive: { type: boolean }
+        emailVerified: { type: boolean }
+    VerifyRequest:
+      type: object
+      required: [email, code]
+      properties:
+        email: { type: string, format: email }
+        code: { type: string, description: "One-time verification code or token" }
+    VerifyResponse:
+      type: object
+      properties:
+        verified:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/User'
     LoginRequest:
       type: object
       required: [email, password]

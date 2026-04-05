@@ -21,7 +21,9 @@ export interface IScreeningResult extends Document {
   counterfactualScenarios?: any; // e.g. [{"if_condition": "2 more years Python", "new_score": 90}]
   featureAttribution?: any;      // SHAP/LIME visualization data
   adjacentRoles: string[];
-  upskillingPaths: any[];
+  upskillingPaths: Record<string, any>[];
+  scoreBreakdown?: any;
+  weightConfig?: any;
   teamChemistryScore?: number;
   tokensUsed?: number;
 }
@@ -47,7 +49,9 @@ const ScreeningResultSchema = new Schema<IScreeningResult>({
   counterfactualScenarios: { type: Schema.Types.Mixed },
   featureAttribution: { type: Schema.Types.Mixed },
   adjacentRoles: { type: [String], default: [] },
-  upskillingPaths: { type: [Schema.Types.Mixed], default: [] },
+  upskillingPaths: { type: [{ key: String, value: Schema.Types.Mixed }], default: [] },
+  scoreBreakdown: { type: Schema.Types.Mixed },
+  weightConfig: { type: Schema.Types.Mixed },
   teamChemistryScore: { type: Number },
   tokensUsed: { type: Number }
 }, { timestamps: true });

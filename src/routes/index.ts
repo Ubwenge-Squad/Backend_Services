@@ -1,5 +1,8 @@
 import { Express, Request, Response } from 'express';
 import multer from 'multer';
+import { ScreeningOrchestrator } from '../ai/orchestrator';
+import { ScreeningRunModel } from '../../models/ScreeningRun.model';
+import { ScreeningResultModel } from '../../models/ScreeningResult.model';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -9,6 +12,8 @@ export function registerRoutes(app: Express): void {
 	app.post('/auth/login', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
 	app.get('/auth/me', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
 	app.post('/auth/logout', (_req: Request, res: Response) => res.status(204).send());
+	app.post('/auth/verify', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
+	app.post('/auth/resend-code', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
 
 	// Jobs
 	app.get('/jobs', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
@@ -35,10 +40,53 @@ export function registerRoutes(app: Express): void {
 	app.patch('/applications/:applicationId', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
 
 	// Screening
-	app.post('/screening-runs', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.get('/screening-runs/:screeningRunId', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.get('/screening-runs/:screeningRunId/results', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.get('/screening-results', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
+	app.post('/screening-runs', async (req: Request, res: Response) => {
+		try {
+			const { jobId, batchSize, topK, useCache, weightConfig } = req.body || {};
+			if (!jobId) {
+				res.status(400).json({ message: 'jobId is required' });
+				return;
+			}
+			if (!process.env.GEMINI_API_KEY) {
+				res.status(500).json({ message: 'GEMINI_API_KEY not configured' });
+				return;
+			}
+			const orch = new ScreeningOrchestrator(process.env.GEMINI_API_KEY);
+			const userId = (req as any).user?.id || 'system';
+			const run = await orch.runForJob(jobId, userId, { topK: topK ?? batchSize, weightConfig, useCache });
+			res.status(202).json(run);
+		} catch (err: any) {
+			res.status(500).json({ message: err?.message ?? 'Failed to start screening' });
+		}
+	});
+	app.get('/screening-runs/:screeningRunId', async (req: Request, res: Response) => {
+		const run = await ScreeningRunModel.findById(req.params.screeningRunId).lean();
+		if (!run) {
+			res.status(404).json({ message: 'Not found' });
+			return;
+		}
+		res.json(run);
+	});
+	app.get('/screening-runs/:screeningRunId/results', async (req: Request, res: Response) => {
+		const results = await ScreeningResultModel.find({ screeningRun: req.params.screeningRunId }).sort({ rankPosition: 1 }).lean();
+		res.json(results);
+	});
+	app.get('/screening-results', async (req: Request, res: Response) => {
+		const { jobId, top } = req.query as any;
+		if (!jobId) {
+			res.status(400).json({ message: 'jobId is required' });
+			return;
+		}
+		// find latest completed run for job
+		const run = await ScreeningRunModel.findOne({ job: jobId, status: 'completed' }).sort({ completedAt: -1 }).lean();
+		if (!run) {
+			res.json([]);
+			return;
+		}
+		const limit = Number(top) || 20;
+		const results = await ScreeningResultModel.find({ screeningRun: run._id }).sort({ rankPosition: 1 }).limit(limit).lean();
+		res.json(results);
+	});
 
 	// Bias
 	app.get('/bias-audits', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
