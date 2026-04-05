@@ -1,0 +1,352 @@
+
+<style>
+#erd svg { width: 100%; }
+.filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.pill { padding: 4px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; border: 1px solid var(--color-border-secondary); background: var(--color-background-secondary); color: var(--color-text-secondary); transition: all .15s; }
+.pill.active { background: var(--color-text-info); color: #fff; border-color: transparent; }
+</style>
+<div style="padding: 12px 0 0">
+  <div class="filter-bar">
+    <button class="pill active" onclick="filterGroup('all', this)">All tables</button>
+    <button class="pill" onclick="filterGroup('auth', this)">Auth & Users</button>
+    <button class="pill" onclick="filterGroup('jobs', this)">Jobs & Applications</button>
+    <button class="pill" onclick="filterGroup('ai', this)">AI & Screening</button>
+    <button class="pill" onclick="filterGroup('compliance', this)">Compliance</button>
+  </div>
+  <div id="erd"></div>
+</div>
+<script type="module">
+import mermaid from 'https://esm.sh/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+await document.fonts.ready;
+mermaid.initialize({
+  startOnLoad: false,
+  theme: dark ? 'dark' : 'default',
+  fontFamily: '"Anthropic Sans", sans-serif'
+});
+
+const diagrams = {
+  all: `erDiagram
+    users ||--o| recruiter_profiles : "has"
+    users ||--o| applicant_profiles : "has"
+    users ||--o{ auth_sessions : "has"
+    users ||--o{ notifications : "receives"
+    applicant_profiles ||--o{ resumes : "uploads"
+    applicant_profiles ||--o{ applications : "submits"
+    recruiter_profiles ||--o{ jobs : "posts"
+    jobs ||--o{ applications : "receives"
+    jobs ||--o{ screening_runs : "triggers"
+    jobs ||--o{ agent_runs : "uses"
+    applications ||--o{ screening_results : "evaluated-in"
+    applications ||--o| interviews : "leads-to"
+    applications ||--o| offers : "results-in"
+    screening_runs ||--o{ screening_results : "produces"
+    screening_runs ||--o| chat_sessions : "unlocks"
+    screening_runs ||--o{ bias_audit_logs : "logs"
+    chat_sessions ||--o{ chat_messages : "contains"
+    users ||--o{ bias_simulations : "runs"
+    users { uuid id PK
+      text email
+      user_role role
+      timestamptz deleted_at
+      timestamptz scheduled_purge_at }
+    recruiter_profiles { uuid id PK
+      uuid user_id FK
+      text company_name
+      boolean prefer_skills_over_degrees }
+    applicant_profiles { uuid id PK
+      uuid user_id FK
+      text[] skills
+      vector skills_dna_vector
+      numeric ai_content_score
+      jsonb anonymized_view }
+    resumes { uuid id PK
+      uuid applicant_id FK
+      text file_url
+      boolean is_primary }
+    jobs { uuid id PK
+      uuid recruiter_id FK
+      text title
+      text[] required_skills
+      boolean requires_degree
+      job_status status
+      text[] team_traits }
+    applications { uuid id PK
+      uuid job_id FK
+      uuid applicant_id FK
+      application_status status
+      int first_response_minutes }
+    screening_runs { uuid id PK
+      uuid job_id FK
+      screening_status status
+      int batch_size
+      text model_version
+      numeric total_cost_usd }
+    screening_results { uuid id PK
+      uuid screening_run_id FK
+      uuid application_id FK
+      int rank_position
+      numeric fit_score
+      numeric base_score_no_edu
+      confidence_level confidence_level
+      text[] strengths
+      text[] gaps
+      text bias_warning
+      jsonb counterfactual_scenarios
+      jsonb feature_attribution
+      text[] adjacent_roles
+      jsonb upskilling_paths
+      numeric team_chemistry_score }
+    chat_sessions { uuid id PK
+      uuid screening_run_id FK
+      timestamptz unlocked_at }
+    chat_messages { uuid id PK
+      uuid session_id FK
+      text role
+      text content
+      text[] suggestion_chips }
+    interviews { uuid id PK
+      uuid application_id FK
+      interview_status status
+      timestamptz scheduled_at }
+    offers { uuid id PK
+      uuid application_id FK
+      numeric salary
+      boolean is_accepted }
+    bias_audit_logs { uuid id PK
+      uuid screening_run_id FK
+      boolean top_three_all_degreed
+      numeric degree_vs_skill_delta
+      text warning_message
+      boolean contextual_variation_tested
+      jsonb variation_results }
+    bias_simulations { uuid id PK
+      uuid recruiter_id FK
+      uuid job_id FK
+      text simulation_name
+      jsonb filters_applied
+      jsonb diversity_impact
+      jsonb skill_delta }
+    agent_runs { uuid id PK
+      uuid job_id FK
+      agent_type agent_type
+      agent_run_status status
+      uuid parent_run_id FK }
+    auth_sessions { uuid id PK
+      uuid user_id FK
+      text token_hash
+      timestamptz expires_at }
+    notifications { uuid id PK
+      uuid user_id FK
+      text type
+      boolean is_read }`,
+
+  auth: `erDiagram
+    users ||--o| recruiter_profiles : "has"
+    users ||--o| applicant_profiles : "has"
+    users ||--o{ auth_sessions : "has"
+    users ||--o{ notifications : "receives"
+    users { uuid id PK
+      text email
+      text password_hash
+      user_role role
+      boolean email_verified
+      timestamptz deleted_at
+      timestamptz scheduled_purge_at }
+    recruiter_profiles { uuid id PK
+      uuid user_id FK
+      text company_name
+      boolean prefer_skills_over_degrees
+      int default_batch_size }
+    applicant_profiles { uuid id PK
+      uuid user_id FK
+      text headline
+      text[] skills
+      vector skills_dna_vector
+      numeric ai_content_score
+      text[] integrity_flags
+      jsonb anonymized_view }
+    auth_sessions { uuid id PK
+      uuid user_id FK
+      text token_hash
+      text device_info
+      timestamptz expires_at
+      timestamptz revoked_at }
+    notifications { uuid id PK
+      uuid user_id FK
+      text type
+      text title
+      boolean is_read }`,
+
+  jobs: `erDiagram
+    recruiter_profiles ||--o{ jobs : "posts"
+    applicant_profiles ||--o{ resumes : "uploads"
+    applicant_profiles ||--o{ applications : "submits"
+    jobs ||--o{ applications : "receives"
+    applications ||--o| interviews : "leads-to"
+    applications ||--o| offers : "results-in"
+    jobs { uuid id PK
+      uuid recruiter_id FK
+      text title
+      text[] required_skills
+      text[] nice_to_have_skills
+      boolean requires_degree
+      job_status status
+      int screening_batch_size
+      numeric salary_min
+      numeric salary_max
+      text[] team_traits }
+    applications { uuid id PK
+      uuid job_id FK
+      uuid applicant_id FK
+      uuid resume_id FK
+      application_status status
+      text cover_letter
+      int first_response_minutes }
+    resumes { uuid id PK
+      uuid applicant_id FK
+      text file_url
+      text parsed_text
+      boolean is_primary
+      text parse_version }
+    interviews { uuid id PK
+      uuid application_id FK
+      interview_status status
+      text interview_type
+      timestamptz scheduled_at
+      int duration_minutes
+      jsonb ai_suggested_questions }
+    offers { uuid id PK
+      uuid application_id FK
+      numeric salary
+      char currency
+      date start_date
+      boolean is_accepted
+      boolean counter_offered }
+    recruiter_profiles { uuid id PK
+      uuid user_id FK
+      text company_name }
+    applicant_profiles { uuid id PK
+      uuid user_id FK
+      text[] skills
+      numeric years_of_experience }`,
+
+  ai: `erDiagram
+    jobs ||--o{ screening_runs : "triggers"
+    jobs ||--o{ agent_runs : "uses"
+    screening_runs ||--o{ screening_results : "produces"
+    screening_runs ||--o| chat_sessions : "unlocks"
+    chat_sessions ||--o{ chat_messages : "contains"
+    agent_runs ||--o{ agent_runs : "orchestrates"
+    screening_runs { uuid id PK
+      uuid job_id FK
+      screening_status status
+      int batch_size
+      text model_version
+      int prompt_tokens
+      int completion_tokens
+      numeric total_cost_usd }
+    screening_results { uuid id PK
+      uuid screening_run_id FK
+      uuid application_id FK
+      int rank_position
+      numeric fit_score
+      numeric base_score_no_edu
+      confidence_level confidence_level
+      text ai_reasoning
+      text[] strengths
+      text[] gaps
+      text bias_warning
+      numeric predicted_join_probability
+      numeric counter_offer_risk
+      jsonb counterfactual_scenarios
+      jsonb feature_attribution
+      text[] adjacent_roles
+      jsonb upskilling_paths
+      numeric team_chemistry_score }
+    chat_sessions { uuid id PK
+      uuid screening_run_id FK
+      uuid recruiter_id FK
+      timestamptz unlocked_at }
+    chat_messages { uuid id PK
+      uuid session_id FK
+      text role
+      text content
+      text[] suggestion_chips
+      int tokens_used }
+    agent_runs { uuid id PK
+      uuid job_id FK
+      agent_type agent_type
+      agent_run_status status
+      uuid parent_run_id FK
+      jsonb input_payload
+      jsonb output_payload }
+    jobs { uuid id PK
+      text title
+      text[] required_skills }`,
+
+  compliance: `erDiagram
+    screening_runs ||--o{ bias_audit_logs : "logs"
+    bias_audit_logs }o--o| screening_results : "references"
+    users ||--o{ audit_trail : "generates"
+    users ||--o{ bias_simulations : "runs"
+    screening_runs { uuid id PK
+      uuid job_id FK
+      text model_version }
+    bias_audit_logs { uuid id PK
+      uuid screening_run_id FK
+      uuid screening_result_id FK
+      boolean top_three_all_degreed
+      numeric degree_vs_skill_delta
+      text warning_message
+      bias_category bias_category
+      boolean dismissed
+      timestamptz dismissed_at
+      boolean contextual_variation_tested
+      jsonb variation_results }
+    bias_simulations { uuid id PK
+      uuid recruiter_id FK
+      uuid job_id FK
+      text simulation_name
+      jsonb filters_applied
+      jsonb diversity_impact
+      jsonb skill_delta }
+    screening_results { uuid id PK
+      numeric fit_score
+      numeric base_score_no_edu
+      text bias_warning
+      boolean bias_warning_dismissed }
+    audit_trail { bigint id PK
+      uuid user_id FK
+      audit_action action
+      text entity_type
+      uuid entity_id
+      jsonb metadata
+      timestamptz created_at }
+    users { uuid id PK
+      text email
+      timestamptz deleted_at
+      timestamptz scheduled_purge_at }`
+};
+
+async function render(key) {
+  const el = document.getElementById('erd');
+  el.innerHTML = '<div style="color:var(--color-text-secondary);font-size:13px;padding:16px 0">Loading diagram…</div>';
+  const id = 'mermaid-' + Date.now();
+  try {
+    const { svg } = await mermaid.render(id, diagrams[key]);
+    el.innerHTML = svg;
+    el.querySelectorAll('svg').forEach(s => { s.style.width = '100%'; s.style.height = 'auto'; });
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--color-text-danger);font-size:13px;padding:8px">Render error: ' + e.message + '</div>';
+  }
+}
+
+window.filterGroup = function(key, btn) {
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  render(key);
+};
+
+render('all');
+</script>
