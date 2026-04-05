@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IUser extends Document {
-  email: string;
+  email: string;    
   passwordHash: string;
   role: 'applicant' | 'recruiter' | 'admin';
   fullName: string;

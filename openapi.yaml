@@ -1,0 +1,969 @@
+openapi: 3.0.3
+info:
+  title: Intore HR AI Screening API
+  version: 1.0.0
+  description: >
+    REST API for Intore AI Screening. Covers authentication, jobs, applicants,
+    resumes, applications, AI screening orchestration (Gemini), results, bias audits, and
+    external CSV ingestion. Schemas mirror the Mongoose models in `Backend_Services/models`.
+servers:
+  - url: https://api.example.com
+    description: Production
+  - url: http://localhost:4000
+    description: Local
+tags:
+  - name: Auth
+  - name: Jobs
+  - name: Applicants
+  - name: Resumes
+  - name: Applications
+  - name: Screening
+  - name: Bias Audits
+  - name: Ingestion
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and receive JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/me:
+    get:
+      tags: [Auth]
+      security: [{ bearerAuth: [] }]
+      summary: Get current user profile
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/logout:
+    post:
+      tags: [Auth]
+      security: [{ bearerAuth: [] }]
+      summary: Logout and revoke session
+      responses:
+        '204':
+          description: Logged out
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /jobs:
+    get:
+      tags: [Jobs]
+      security: [{ bearerAuth: [] }]
+      summary: List jobs
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [draft, active, paused, closed, archived]
+      responses:
+        '200':
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Job'
+    post:
+      tags: [Jobs]
+      security: [{ bearerAuth: [] }]
+      summary: Create job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobCreateRequest'
+      responses:
+        '201':
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /jobs/{jobId}:
+    get:
+      tags: [Jobs]
+      security: [{ bearerAuth: [] }]
+      summary: Get a job
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Jobs]
+      security: [{ bearerAuth: [] }]
+      summary: Update a job
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobUpdateRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /jobs/{jobId}/activate:
+    post:
+      tags: [Jobs]
+      security: [{ bearerAuth: [] }]
+      summary: Activate a job
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /jobs/{jobId}/close:
+    post:
+      tags: [Jobs]
+      security: [{ bearerAuth: [] }]
+      summary: Close a job
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Closed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /applicants:
+    get:
+      tags: [Applicants]
+      security: [{ bearerAuth: [] }]
+      summary: List applicant profiles
+      responses:
+        '200':
+          description: Applicants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApplicantProfile'
+    post:
+      tags: [Applicants]
+      security: [{ bearerAuth: [] }]
+      summary: Create applicant profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicantProfileCreateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicantProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /applicants/{applicantId}:
+    get:
+      tags: [Applicants]
+      security: [{ bearerAuth: [] }]
+      summary: Get applicant profile
+      parameters:
+        - $ref: '#/components/parameters/ApplicantId'
+      responses:
+        '200':
+          description: Applicant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicantProfile'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Applicants]
+      security: [{ bearerAuth: [] }]
+      summary: Update applicant profile
+      parameters:
+        - $ref: '#/components/parameters/ApplicantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicantProfileUpdateRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicantProfile'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /resumes:
+    post:
+      tags: [Resumes]
+      security: [{ bearerAuth: [] }]
+      summary: Upload a resume file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                applicantId:
+                  type: string
+                file:
+                  type: string
+                  format: binary
+                isPrimary:
+                  type: boolean
+      responses:
+        '201':
+          description: Resume stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resume'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /resumes/{resumeId}:
+    get:
+      tags: [Resumes]
+      security: [{ bearerAuth: [] }]
+      summary: Get a resume
+      parameters:
+        - $ref: '#/components/parameters/ResumeId'
+      responses:
+        '200':
+          description: Resume
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resume'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /resumes/{resumeId}/parse:
+    post:
+      tags: [Resumes]
+      security: [{ bearerAuth: [] }]
+      summary: Parse resume to text and store
+      parameters:
+        - $ref: '#/components/parameters/ResumeId'
+      responses:
+        '200':
+          description: Parsed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resume'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /applications:
+    get:
+      tags: [Applications]
+      security: [{ bearerAuth: [] }]
+      summary: List applications
+      parameters:
+        - in: query
+          name: jobId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Application'
+    post:
+      tags: [Applications]
+      security: [{ bearerAuth: [] }]
+      summary: Create application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationCreateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /applications/{applicationId}:
+    patch:
+      tags: [Applications]
+      security: [{ bearerAuth: [] }]
+      summary: Update application status/notes
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationUpdateRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /screening-runs:
+    post:
+      tags: [Screening]
+      security: [{ bearerAuth: [] }]
+      summary: Trigger AI screening run for a job
+      description: >
+        Starts a Gemini-backed multi-candidate screening for the specified job. Processes all applications
+        currently in 'submitted' or 'screening' state up to batch size.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreeningRunCreateRequest'
+      responses:
+        '202':
+          description: Screening run created and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningRun'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /screening-runs/{screeningRunId}:
+    get:
+      tags: [Screening]
+      security: [{ bearerAuth: [] }]
+      summary: Get screening run status
+      parameters:
+        - $ref: '#/components/parameters/ScreeningRunId'
+      responses:
+        '200':
+          description: Screening run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningRun'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /screening-runs/{screeningRunId}/results:
+    get:
+      tags: [Screening]
+      security: [{ bearerAuth: [] }]
+      summary: Get results for a screening run
+      parameters:
+        - $ref: '#/components/parameters/ScreeningRunId'
+      responses:
+        '200':
+          description: Results list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScreeningResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /screening-results:
+    get:
+      tags: [Screening]
+      security: [{ bearerAuth: [] }]
+      summary: Query screening results by job
+      parameters:
+        - in: query
+          name: jobId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: top
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Results list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScreeningResult'
+
+  /bias-audits:
+    get:
+      tags: [Bias Audits]
+      security: [{ bearerAuth: [] }]
+      summary: List bias audit logs
+      parameters:
+        - in: query
+          name: screeningRunId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bias audit logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BiasAuditLog'
+  /bias-audits/{biasAuditId}/dismiss:
+    post:
+      tags: [Bias Audits]
+      security: [{ bearerAuth: [] }]
+      summary: Dismiss a bias warning
+      parameters:
+        - $ref: '#/components/parameters/BiasAuditId'
+      responses:
+        '200':
+          description: Updated log
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BiasAuditLog'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /ingestion/csv:
+    post:
+      tags: [Ingestion]
+      security: [{ bearerAuth: [] }]
+      summary: Upload CSV/XLSX of applicants and create applications
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                jobId:
+                  type: string
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '202':
+          description: Ingestion started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+                  acceptedRows:
+                    type: integer
+                  rejectedRows:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    JobId:
+      in: path
+      name: jobId
+      required: true
+      schema:
+        type: string
+    ApplicantId:
+      in: path
+      name: applicantId
+      required: true
+      schema:
+        type: string
+    ResumeId:
+      in: path
+      name: resumeId
+      required: true
+      schema:
+        type: string
+    ApplicationId:
+      in: path
+      name: applicationId
+      required: true
+      schema:
+        type: string
+    ScreeningRunId:
+      in: path
+      name: screeningRunId
+      required: true
+      schema:
+        type: string
+    BiasAuditId:
+      in: path
+      name: biasAuditId
+      required: true
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        details:
+          nullable: true
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+    RegisterRequest:
+      type: object
+      required: [email, password, fullName, role]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+        fullName: { type: string }
+        role:
+          type: string
+          enum: [applicant, recruiter, admin]
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        role:
+          type: string
+          enum: [applicant, recruiter, admin]
+        fullName: { type: string }
+        avatarUrl: { type: string, nullable: true }
+        phoneNumber: { type: string, nullable: true }
+        isActive: { type: boolean }
+        emailVerified: { type: boolean }
+        lastLoginAt: { type: string, format: date-time, nullable: true }
+
+    Job:
+      type: object
+      properties:
+        id: { type: string }
+        recruiter: { type: string }
+        title: { type: string }
+        description: { type: string }
+        requirements: { type: string, nullable: true }
+        responsibilities: { type: string, nullable: true }
+        requiredSkills:
+          type: array
+          items: { type: string }
+        niceToHaveSkills:
+          type: array
+          items: { type: string }
+        minYearsExperience: { type: number, nullable: true }
+        requiresDegree: { type: boolean }
+        degreeDetails: { type: string, nullable: true }
+        location: { type: string, nullable: true }
+        isRemote: { type: boolean }
+        employmentType: { type: string, nullable: true }
+        salaryMin: { type: number, nullable: true }
+        salaryMax: { type: number, nullable: true }
+        currency: { type: string }
+        status:
+          type: string
+          enum: [draft, active, paused, closed, archived]
+        publishedAt: { type: string, format: date-time, nullable: true }
+        closedAt: { type: string, format: date-time, nullable: true }
+        screeningBatchSize: { type: number }
+        aiAssisted: { type: boolean }
+        teamTraits:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    JobCreateRequest:
+      allOf:
+        - $ref: '#/components/schemas/Job'
+      required: [title, description]
+    JobUpdateRequest:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        requirements: { type: string }
+        responsibilities: { type: string }
+        requiredSkills:
+          type: array
+          items: { type: string }
+        niceToHaveSkills:
+          type: array
+          items: { type: string }
+        minYearsExperience: { type: number }
+        requiresDegree: { type: boolean }
+        degreeDetails: { type: string }
+        location: { type: string }
+        isRemote: { type: boolean }
+        employmentType: { type: string }
+        salaryMin: { type: number }
+        salaryMax: { type: number }
+        currency: { type: string }
+        status:
+          type: string
+          enum: [draft, active, paused, closed, archived]
+        screeningBatchSize: { type: number }
+        aiAssisted: { type: boolean }
+        teamTraits:
+          type: array
+          items: { type: string }
+
+    ApplicantProfile:
+      type: object
+      properties:
+        id: { type: string }
+        user: { type: string }
+        headline: { type: string, nullable: true }
+        summary: { type: string, nullable: true }
+        location: { type: string, nullable: true }
+        yearsOfExperience: { type: number, nullable: true }
+        linkedinUrl: { type: string, nullable: true }
+        githubUrl: { type: string, nullable: true }
+        portfolioUrl: { type: string, nullable: true }
+        skillsDnaVector:
+          type: array
+          items: { type: number }
+        skills:
+          type: array
+          items: { type: string }
+        education:
+          type: array
+          items:
+            $ref: '#/components/schemas/Education'
+        workExperience:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkExperience'
+        hasCareerGaps: { type: boolean }
+        careerGapMonths: { type: number, nullable: true }
+        aiContentScore: { type: number, nullable: true }
+        integrityFlags:
+          type: array
+          items: { type: string }
+        anonymizedView:
+          nullable: true
+    ApplicantProfileCreateRequest:
+      allOf:
+        - $ref: '#/components/schemas/ApplicantProfile'
+      required: [user, skills]
+    ApplicantProfileUpdateRequest:
+      type: object
+      properties:
+        headline: { type: string }
+        summary: { type: string }
+        location: { type: string }
+        yearsOfExperience: { type: number }
+        linkedinUrl: { type: string }
+        githubUrl: { type: string }
+        portfolioUrl: { type: string }
+        skills:
+          type: array
+          items: { type: string }
+        education:
+          type: array
+          items:
+            $ref: '#/components/schemas/Education'
+        workExperience:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkExperience'
+        hasCareerGaps: { type: boolean }
+        careerGapMonths: { type: number }
+        aiContentScore: { type: number }
+        integrityFlags:
+          type: array
+          items: { type: string }
+
+    Education:
+      type: object
+      properties:
+        institution: { type: string }
+        degree: { type: string, nullable: true }
+        fieldOfStudy: { type: string, nullable: true }
+        startDate: { type: string, format: date-time, nullable: true }
+        endDate: { type: string, format: date-time, nullable: true }
+      required: [institution]
+    WorkExperience:
+      type: object
+      properties:
+        company: { type: string }
+        position: { type: string }
+        startDate: { type: string, format: date-time, nullable: true }
+        endDate: { type: string, format: date-time, nullable: true }
+        description: { type: string, nullable: true }
+      required: [company, position]
+
+    Resume:
+      type: object
+      properties:
+        id: { type: string }
+        applicant: { type: string }
+        fileName: { type: string }
+        fileUrl: { type: string }
+        fileSizeBytes: { type: number, nullable: true }
+        mimeType: { type: string }
+        isPrimary: { type: boolean }
+        parsedText: { type: string, nullable: true }
+        parsedAt: { type: string, format: date-time, nullable: true }
+        parseVersion: { type: string, nullable: true }
+
+    Application:
+      type: object
+      properties:
+        id: { type: string }
+        job: { type: string }
+        applicant: { type: string }
+        resume: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [submitted, screening, shortlisted, interviewed, offered, hired, rejected, withdrawn]
+        coverLetter: { type: string, nullable: true }
+        recruiterNotes: { type: string, nullable: true }
+        submittedAt: { type: string, format: date-time }
+        firstResponseMinutes: { type: number, nullable: true }
+        ingestionSource:
+          type: string
+          enum: [platform, csv, external_board, manual]
+          nullable: true
+    ApplicationCreateRequest:
+      type: object
+      required: [job, applicant]
+      properties:
+        job: { type: string }
+        applicant: { type: string }
+        resume: { type: string }
+        coverLetter: { type: string }
+        ingestionSource:
+          type: string
+          enum: [platform, csv, external_board, manual]
+    ApplicationUpdateRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [submitted, screening, shortlisted, interviewed, offered, hired, rejected, withdrawn]
+        recruiterNotes: { type: string }
+
+    ScreeningRun:
+      type: object
+      properties:
+        id: { type: string }
+        job: { type: string }
+        triggeredBy: { type: string }
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        batchSize: { type: number }
+        totalCandidates: { type: number }
+        processedCount: { type: number }
+        modelVersion: { type: string }
+        startedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        errorMessage: { type: string, nullable: true }
+        promptTokens: { type: number, nullable: true }
+        completionTokens: { type: number, nullable: true }
+        totalCostUsd: { type: number, nullable: true }
+    ScreeningRunCreateRequest:
+      type: object
+      required: [jobId]
+      properties:
+        jobId: { type: string }
+        batchSize: { type: number }
+
+    ScoreBreakdown:
+      type: object
+      properties:
+        skills: { type: number }
+        experience: { type: number }
+        education: { type: number }
+        relevance: { type: number }
+    WeightConfig:
+      type: object
+      properties:
+        skills: { type: number }
+        experience: { type: number }
+        education: { type: number }
+        relevance: { type: number }
+
+    ScreeningResult:
+      type: object
+      properties:
+        id: { type: string }
+        screeningRun: { type: string }
+        application: { type: string }
+        rankPosition: { type: number, nullable: true }
+        fitScore: { type: number }
+        baseScoreNoEdu: { type: number, nullable: true }
+        confidenceLevel:
+          type: string
+          enum: [high, medium, low]
+        aiReasoning: { type: string }
+        strengths:
+          type: array
+          items: { type: string }
+        gaps:
+          type: array
+          items: { type: string }
+        biasWarning: { type: string, nullable: true }
+        biasCategory:
+          type: string
+          enum: [credential_bias, demographic_bias, career_gap_bias, linguistic_bias, other]
+          nullable: true
+        biasWarningDismissed: { type: boolean }
+        biasWarningDismissedAt: { type: string, format: date-time, nullable: true }
+        biasWarningDismissedBy: { type: string, nullable: true }
+        responseTimeMinutes: { type: number, nullable: true }
+        predictedJoinProbability: { type: number, nullable: true }
+        counterOfferRisk: { type: number, nullable: true }
+        counterfactualScenarios:
+          nullable: true
+        featureAttribution:
+          nullable: true
+        adjacentRoles:
+          type: array
+          items: { type: string }
+        upskillingPaths:
+          type: array
+          items:
+            type: object
+        teamChemistryScore: { type: number, nullable: true }
+        tokensUsed: { type: number, nullable: true }
+        scoreBreakdown:
+          $ref: '#/components/schemas/ScoreBreakdown'
+        weightConfig:
+          $ref: '#/components/schemas/WeightConfig'
+
+    BiasAuditLog:
+      type: object
+      properties:
+        id: { type: string }
+        screeningRun: { type: string }
+        screeningResult: { type: string, nullable: true }
+        topThreeAllDegreed: { type: boolean }
+        degreeVsSkillDelta: { type: number, nullable: true }
+        warningMessage: { type: string, nullable: true }
+        biasCategory:
+          type: string
+          enum: [credential_bias, demographic_bias, career_gap_bias, linguistic_bias, other]
+          nullable: true
+        dismissed: { type: boolean }
+        dismissedBy: { type: string, nullable: true }
+        dismissedAt: { type: string, format: date-time, nullable: true }
+        contextualVariationTested: { type: boolean }
+        variationResults:
+          nullable: true
+
+security:
+  - bearerAuth: []
+
