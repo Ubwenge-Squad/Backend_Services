@@ -29,7 +29,7 @@ SemanticCacheSchema.pre('validate', function(next) {
     expires.setHours(expires.getHours() + 24);
     this.expiresAt = expires;
   }
-  next();
+  (next as any)();
 });
 
 export const SemanticCacheModel = mongoose.models.SemanticCache || mongoose.model<ISemanticCache>('SemanticCache', SemanticCacheSchema);

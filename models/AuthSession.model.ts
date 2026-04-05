@@ -25,7 +25,7 @@ AuthSessionSchema.pre('validate', function(next) {
     expires.setDate(expires.getDate() + 7);
     this.expiresAt = expires;
   }
-  next();
+  (next as any)();
 });
 
 export const AuthSessionModel = mongoose.models.AuthSession || mongoose.model<IAuthSession>('AuthSession', AuthSessionSchema);
