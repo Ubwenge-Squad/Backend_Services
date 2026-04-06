@@ -13,7 +13,6 @@ export function registerRoutes(app: Express): void {
 	app.post('/auth/register', AuthController.register);
 	app.post('/auth/login', AuthController.login);
 	app.get('/auth/me', requireAuth, (req: Request, res: Response) => {
-		// Example of using requireAuth
 		res.json({ user: req.user });
 	});
 	app.post('/auth/logout', (_req: Request, res: Response) => res.status(204).send());
