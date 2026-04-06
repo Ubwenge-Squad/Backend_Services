@@ -3,15 +3,13 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import { UserModel } from "../models/User.model";
+import { AuthUser } from "../middlewares/auth";
 dotenv.config();
 
 export const AuthController ={
-    async register(req:Request, res:Response){
+    async register(req: Request, res: Response) {
         try {
-            const jwtSecret = process.env.JWT_SECRET;
-            if (!jwtSecret) {
-                return res.status(500).json({ message: "JWT secret is not configured" });
-            }
+            const jwtSecret = process.env.JWT_SECRET!;
             const {email, password, fullname , phoneNumber} = req.body;
             if(!email || !password || !fullname || !phoneNumber){
                 return res.status(400).json({message:"All fields are required!"});
@@ -28,23 +26,26 @@ export const AuthController ={
                 passwordHash,
                 fullName: fullname,
                 phoneNumber,
-                role:"applicant",
-                isActive:true,
-                emailVerified:false
+                role: "applicant",
+                isActive: true,
+                emailVerified: false,
+                lastLoginAt: new Date()
             });
 
-            const token = jwt.sign({
-                id: newUser._id,
-                email:newUser.email,
-                role:newUser.role
-            },jwtSecret,{expiresIn:"7d"});
+            const payload: AuthUser = {
+                id: newUser._id.toString(),
+                email: newUser.email,
+                role: newUser.role
+            };
+
+            const token = jwt.sign(payload, jwtSecret, { expiresIn: "7d" });
             return res.status(201).json({message:"User created successfully",
                 token,
                 user: {
-                    id:newUser._id,
-                    email:newUser.email,
-                    role:newUser.role,
-                    fullName:newUser.fullName
+                    id: newUser._id.toString(),
+                    email: newUser.email,
+                    role: newUser.role,
+                    fullName: newUser.fullName
                 }
             });
         } catch (error) {
@@ -53,12 +54,9 @@ export const AuthController ={
         }
     },
 
-    async login( req: Request, res:Response){
+    async login(req: Request, res: Response) {
         try {
-            const jwtSecret = process.env.JWT_SECRET;
-            if (!jwtSecret) {
-                return res.status(500).json({ message: "JWT secret is not configured" });
-            }
+            const jwtSecret = process.env.JWT_SECRET!;
             const {email,password} = req.body;
             if(!email || !password){
                 return res.status(400).json({message:"All fields are required"});
@@ -73,18 +71,21 @@ export const AuthController ={
             }
             user.lastLoginAt = new Date();
             await user.save();
-            const token = jwt.sign({
-                id: user._id,
-                email:user.email,
-                role:user.role
-            },jwtSecret,{expiresIn:"7d"});
+
+            const payload: AuthUser = {
+                id: user._id.toString(),
+                email: user.email,
+                role: user.role
+            };
+
+            const token = jwt.sign(payload, jwtSecret, { expiresIn: "7d" });
             return res.status(200).json({message:"Login successful",
                 token,
                 user: {
-                    id:user._id,
-                    email:user.email,
-                    role:user.role,
-                    fullName:user.fullName
+                    id: user._id.toString(),
+                    email: user.email,
+                    role: user.role,
+                    fullName: user.fullName
                 }
             });
         } catch (error) {
