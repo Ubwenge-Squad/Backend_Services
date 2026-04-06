@@ -137,7 +137,6 @@ paths:
   /jobs:
     get:
       tags: [Jobs]
-      security: [{ bearerAuth: [] }]
       summary: List jobs
       parameters:
         - in: query
@@ -145,15 +144,23 @@ paths:
           schema:
             type: string
             enum: [draft, active, paused, closed, archived]
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
       responses:
         '200':
           description: Jobs
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Job'
+                $ref: '#/components/schemas/PaginatedJobs'
     post:
       tags: [Jobs]
       security: [{ bearerAuth: [] }]
@@ -176,7 +183,6 @@ paths:
   /jobs/{jobId}:
     get:
       tags: [Jobs]
-      security: [{ bearerAuth: [] }]
       summary: Get a job
       parameters:
         - $ref: '#/components/parameters/JobId'
@@ -248,15 +254,24 @@ paths:
       tags: [Applicants]
       security: [{ bearerAuth: [] }]
       summary: List applicant profiles
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
       responses:
         '200':
           description: Applicants
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ApplicantProfile'
+                $ref: '#/components/schemas/PaginatedApplicants'
     post:
       tags: [Applicants]
       security: [{ bearerAuth: [] }]
@@ -328,6 +343,8 @@ paths:
               properties:
                 applicantId:
                   type: string
+                applicant:
+                  type: string
                 file:
                   type: string
                   format: binary
@@ -385,15 +402,27 @@ paths:
           name: jobId
           schema:
             type: string
+        - in: query
+          name: applicantId
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
       responses:
         '200':
           description: Applications
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Application'
+                $ref: '#/components/schemas/PaginatedApplications'
     post:
       tags: [Applications]
       security: [{ bearerAuth: [] }]
@@ -529,15 +558,23 @@ paths:
           name: screeningRunId
           schema:
             type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
       responses:
         '200':
           description: Bias audit logs
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/BiasAuditLog'
+                $ref: '#/components/schemas/PaginatedBiasAudits'
   /bias-audits/{biasAuditId}/dismiss:
     post:
       tags: [Bias Audits]
@@ -659,6 +696,49 @@ components:
           type: string
         details:
           nullable: true
+    PaginationMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+    PaginatedJobs:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Job'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+    PaginatedApplicants:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApplicantProfile'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+    PaginatedApplications:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Application'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+    PaginatedBiasAudits:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BiasAuditLog'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
     AuthResponse:
       type: object
       properties:

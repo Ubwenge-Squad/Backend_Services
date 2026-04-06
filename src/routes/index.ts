@@ -4,7 +4,13 @@ import { ScreeningOrchestrator } from '../ai/orchestrator';
 import { ScreeningRunModel } from '../models/ScreeningRun.model';
 import { ScreeningResultModel } from '../models/ScreeningResult.model';
 import { AuthController } from '../Controllers/auth.controller';
-import { requireAuth } from '../middlewares/auth';
+import { ApplicantsController } from '../Controllers/applicants.controller';
+import { ApplicationsController } from '../Controllers/applications.controller';
+import { BiasController } from '../Controllers/bias.controller';
+import { IngestionController } from '../Controllers/ingestion.controller';
+import { JobsController } from '../Controllers/jobs.controller';
+import { ResumesController } from '../Controllers/resumes.controller';
+import { requireAuth, requireRole } from '../middlewares/auth';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -20,28 +26,28 @@ export function registerRoutes(app: Express): void {
 	app.post('/auth/resend-code', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
 
 	// Jobs
-	app.get('/jobs', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.post('/jobs', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.get('/jobs/:jobId', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.patch('/jobs/:jobId', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.post('/jobs/:jobId/activate', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.post('/jobs/:jobId/close', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
+	app.get('/jobs', JobsController.list);
+	app.post('/jobs', requireAuth, requireRole(['recruiter', 'admin']), JobsController.create);
+	app.get('/jobs/:jobId', JobsController.getById);
+	app.patch('/jobs/:jobId', requireAuth, requireRole(['recruiter', 'admin']), JobsController.update);
+	app.post('/jobs/:jobId/activate', requireAuth, requireRole(['recruiter', 'admin']), JobsController.activate);
+	app.post('/jobs/:jobId/close', requireAuth, requireRole(['recruiter', 'admin']), JobsController.close);
 
 	// Applicants
-	app.get('/applicants', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.post('/applicants', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.get('/applicants/:applicantId', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.patch('/applicants/:applicantId', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
+	app.get('/applicants', requireAuth, requireRole(['recruiter', 'admin']), ApplicantsController.list);
+	app.post('/applicants', requireAuth, ApplicantsController.create);
+	app.get('/applicants/:applicantId', requireAuth, ApplicantsController.getById);
+	app.patch('/applicants/:applicantId', requireAuth, ApplicantsController.update);
 
 	// Resumes
-	app.post('/resumes', upload.single('file'), (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.get('/resumes/:resumeId', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.post('/resumes/:resumeId/parse', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
+	app.post('/resumes', requireAuth, upload.single('file'), ResumesController.create);
+	app.get('/resumes/:resumeId', requireAuth, ResumesController.getById);
+	app.post('/resumes/:resumeId/parse', requireAuth, requireRole(['recruiter', 'admin']), ResumesController.parse);
 
 	// Applications
-	app.get('/applications', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.post('/applications', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.patch('/applications/:applicationId', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
+	app.get('/applications', requireAuth, ApplicationsController.list);
+	app.post('/applications', requireAuth, ApplicationsController.create);
+	app.patch('/applications/:applicationId', requireAuth, ApplicationsController.update);
 
 	// Screening
 	app.post('/screening-runs', async (req: Request, res: Response) => {
@@ -93,10 +99,10 @@ export function registerRoutes(app: Express): void {
 	});
 
 	// Bias
-	app.get('/bias-audits', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.post('/bias-audits/:biasAuditId/dismiss', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
+	app.get('/bias-audits', requireAuth, requireRole(['recruiter', 'admin']), BiasController.list);
+	app.post('/bias-audits/:biasAuditId/dismiss', requireAuth, requireRole(['recruiter', 'admin']), BiasController.dismiss);
 
 	// Ingestion (CSV/XLSX)
-	app.post('/ingestion/csv', upload.single('file'), (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
+	app.post('/ingestion/csv', requireAuth, requireRole(['recruiter', 'admin']), upload.single('file'), IngestionController.ingestCsv);
 }
 
