@@ -10,12 +10,12 @@ const JWT_SECRET = process.env.JWT_SECRET;
 export const AuthController ={
     async register(req:Request, res:Response){
         try {
-            const {email, password, fullname , phoneMumber} = req.body;
-            if(!email || !password || !fullname || !phoneMumber){
+            const {email, password, fullname , phoneNumber} = req.body;
+            if(!email || !password || !fullname || !phoneNumber){
                 return res.status(400).json({message:"All fields are required"});
             }
-            const exiseingUser = await UserModel.findOne({email});
-            if(exiseingUser){
+            const existingUser = await UserModel.findOne({email});
+            if(existingUser){
                 return res.status(409).json({message:"User already exists"});
             }
             const salt = await bcrypt.genSalt(10);
@@ -23,9 +23,9 @@ export const AuthController ={
 
             const newUser = await UserModel.create({
                 email,
-                password:passwordHash,
-                fullname,
-                phoneMumber,
+                passwordHash,
+                fullName: fullname,
+                phoneNumber,
                 role:"applicant",
                 isActive:true,
                 emailVerified:false
@@ -42,7 +42,7 @@ export const AuthController ={
                     id:newUser._id,
                     email:newUser.email,
                     role:newUser.role,
-                    fullname:newUser.fullname
+                    fullName:newUser.fullName
                 }
             });
         } catch (error) {
@@ -61,11 +61,11 @@ export const AuthController ={
             if(!user){
                 return res.status(401).json({message: "Invalid credentials"});
             }
-            const isPasswordMatch = await bcrypt.compare(password,user.password);
+            const isPasswordMatch = await bcrypt.compare(password,user.passwordHash);
             if(!isPasswordMatch){
                 return res.status(401).json({message: "Invalid credentials"});
             }
-            user.lastLogin = new Date();
+            user.lastLoginAt = new Date();
             await user.save();
             const token = jwt.sign({
                 id: user._id,
@@ -78,7 +78,7 @@ export const AuthController ={
                     id:user._id,
                     email:user.email,
                     role:user.role,
-                    fullname:user.fullname
+                    fullName:user.fullName
                 }
             });
         } catch (error) {
