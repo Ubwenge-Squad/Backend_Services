@@ -49,5 +49,25 @@ export const AuthController ={
             console.log("Registration error", error);
             return res.status(500).json({message:"Internal server error during registration"});
         }
+    },
+
+    async login( req: Request, res:Response){
+        try {
+            const {email,password} = req.body;
+            if(!email || !password){
+                return res.status(400).json({message:"All fields are required"});
+            }
+            const user = await UserModel.findOne({email});
+            if(!user){
+                return res.status(401).json({message: "Invalid credentials"});
+            }
+            const isPasswordMatch = await bcrypt.compare(password,user.password);
+            if(!isPasswordMatch){
+                return res.status(401).json({message: "Invalid credentials"});
+            }
+            
+        } catch (error) {
+            
+        }
     }
 }
