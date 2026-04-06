@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "nodemon --watch . --ext ts --exec ts-node src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "start:prod": "npm run build && node dist/index.js",
+    "check": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
