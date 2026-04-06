@@ -21,18 +21,18 @@ export function requireAuth(req: Request, res:Response, next: NextFunction): voi
 		res.status(500).json({ message: "JWT secret is not configured" });
 		return;
 	}
-	const header =req.headers.authorization;
-	if(!header || !header.startsWith('Bearer ')){
-		res.status(401).json({message: "Unauthorized"});
+	const authHeader = req.headers.authorization;
+	if (!authHeader?.startsWith('Bearer ')) {
+		res.status(401).json({ message: "Unauthorized: Missing or invalid token format" });
 		return;
 	}
-	const token = header.slice('Bearer'.length).trim();
-	if(!token){
-		res.status(401).json({message: "Unauthorized"});
+	const token = authHeader.split(' ')[1];
+	if (!token) {
+		res.status(401).json({ message: "Unauthorized: Token missing" });
 		return;
 	}
 	try {
-		const payload = jwt.verify(token, jwtSecret)as AuthUser;
+		const payload = jwt.verify(token, jwtSecret) as AuthUser;
 		req.user = payload;
 		next();
 	}
