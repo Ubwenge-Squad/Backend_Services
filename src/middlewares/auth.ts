@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction, response } from "express";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -9,41 +9,51 @@ export interface AuthUser{
 	role: 'applicant' | 'recruiter' | 'admin';
 }
 
-declare module "express-serve-static-core" {
-	interface Request {
-		user?: AuthUser;
+declare global {
+	namespace Express {
+		interface Request {
+			user?: AuthUser;
+		}
 	}
 }
 
 export function requireAuth(req: Request, res:Response, next: NextFunction): void {
-	const header = req.headers.authorization;
-	if (!header || !header.startsWith('Bearer ')) {
-		res.status(401).json({ message: "Unauthorized" });
+	const header =req.headers.authorization;
+	if(!header || !header.startsWith('Bearer ')){
+		res.status(401).json({message: "Unauthorized"});
 		return;
 	}
-
-	if (!JWT_SECRET) {
-		res.status(500).json({ message: "JWT_SECRET not configured" });
+	const token = header.slice('Bearer'.length).trim();
+	if(!token){
+		res.status(401).json({message: "Unauthorized"});
 		return;
 	}
-
-	const token = header.slice('Bearer '.length);
 	try {
-		const payload = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload & {
-			id?: string;
-			email?: string;
-			role?: AuthUser['role'];
-		};
-
-		if (!payload?.id || !payload?.email || !payload?.role) {
-			res.status(401).json({ message: "Unauthorized" });
+		const payload = jwt.verify(token, JWT_SECRET!)as AuthUser;
+		req.user = payload;
+		next();
+	}
+	catch(error:any){
+		if(error.name === 'TokenExpiredError'){
+			res.status(401).json({message: "Token expired"});
 			return;
 		}
-
-		req.user = { id: payload.id, email: payload.email, role: payload.role };
-		next();
-	} catch {
-		res.status(401).json({ message: "Unauthorized" });
+		res.status(401).json({message: "Unauthorized: Invalid token"});
 		return;
 	}
+}
+
+export function requireRole(role: AuthUser['role'][]): (req:Request, res:Response, next:NextFunction) => void{
+	return (req:Request, res:Response, next:NextFunction) => {
+		const user = req.user;
+		if(!user){
+			res.status(401).json({message: "Unauthorized: No user session"});
+			return;
+		}
+		if(!role.includes(user.role)){
+			res.status(403).json({message: "Forbidden: User does not have required role"});
+			return;
+		}
+		next();
+	};
 }
