@@ -37,7 +37,7 @@ UserSchema.pre('save', function (next) {
     purgeDate.setDate(purgeDate.getDate() + 90);
     this.scheduledPurgeAt = purgeDate;
   }
-  (next as any)();
+
 });
 
 export const UserModel = mongoose.models.User || mongoose.model<IUser>('User', UserSchema);

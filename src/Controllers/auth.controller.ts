@@ -12,7 +12,7 @@ export const AuthController ={
         try {
             const {email, password, fullname , phoneNumber} = req.body;
             if(!email || !password || !fullname || !phoneNumber){
-                return res.status(400).json({message:"All fields are required"});
+                return res.status(400).json({message:"All fields are required!"});
             }
             const existingUser = await UserModel.findOne({email});
             if(existingUser){
