@@ -5,14 +5,16 @@ import dotenv from "dotenv";
 import { UserModel } from "../models/User.model";
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET;
-
 export const AuthController ={
     async register(req:Request, res:Response){
         try {
+            const jwtSecret = process.env.JWT_SECRET;
+            if (!jwtSecret) {
+                return res.status(500).json({ message: "JWT secret is not configured" });
+            }
             const {email, password, fullname , phoneNumber} = req.body;
             if(!email || !password || !fullname || !phoneNumber){
-                return res.status(400).json({message:"All fields are required"});
+                return res.status(400).json({message:"All fields are required!"});
             }
             const existingUser = await UserModel.findOne({email});
             if(existingUser){
@@ -35,7 +37,7 @@ export const AuthController ={
                 id: newUser._id,
                 email:newUser.email,
                 role:newUser.role
-            },JWT_SECRET!,{expiresIn:"7d"});
+            },jwtSecret,{expiresIn:"7d"});
             return res.status(201).json({message:"User created successfully",
                 token,
                 user: {
@@ -53,6 +55,10 @@ export const AuthController ={
 
     async login( req: Request, res:Response){
         try {
+            const jwtSecret = process.env.JWT_SECRET;
+            if (!jwtSecret) {
+                return res.status(500).json({ message: "JWT secret is not configured" });
+            }
             const {email,password} = req.body;
             if(!email || !password){
                 return res.status(400).json({message:"All fields are required"});
@@ -71,7 +77,7 @@ export const AuthController ={
                 id: user._id,
                 email:user.email,
                 role:user.role
-            },JWT_SECRET!,{expiresIn:"7d"});
+            },jwtSecret,{expiresIn:"7d"});
             return res.status(200).json({message:"Login successful",
                 token,
                 user: {

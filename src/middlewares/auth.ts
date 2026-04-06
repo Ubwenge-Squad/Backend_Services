@@ -1,7 +1,5 @@
-import { Request, Response, NextFunction, response } from "express";
+import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET;
 
 export interface AuthUser{
 	id: string;
@@ -18,6 +16,11 @@ declare global {
 }
 
 export function requireAuth(req: Request, res:Response, next: NextFunction): void {
+	const jwtSecret = process.env.JWT_SECRET;
+	if (!jwtSecret) {
+		res.status(500).json({ message: "JWT secret is not configured" });
+		return;
+	}
 	const header =req.headers.authorization;
 	if(!header || !header.startsWith('Bearer ')){
 		res.status(401).json({message: "Unauthorized"});
@@ -29,7 +32,7 @@ export function requireAuth(req: Request, res:Response, next: NextFunction): voi
 		return;
 	}
 	try {
-		const payload = jwt.verify(token, JWT_SECRET!)as AuthUser;
+		const payload = jwt.verify(token, jwtSecret)as AuthUser;
 		req.user = payload;
 		next();
 	}
