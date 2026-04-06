@@ -1,7 +1,7 @@
-import { ApplicationModel } from '../../../models/Application.model';
-import { ApplicantProfileModel } from '../../../models/ApplicantProfile.model';
-import { ResumeModel } from '../../../models/Resume.model';
-import { JobModel } from '../../../models/Job.model';
+import { ApplicationModel } from '../../models/Application.model';
+import { ApplicantProfileModel } from '../../models/ApplicantProfile.model';
+import { ResumeModel } from '../../models/Resume.model';
+import { JobModel } from '../../models/Job.model';
 
 export async function getJobWithApplicants(jobId: string) {
 	const job = await JobModel.findById(jobId).lean();

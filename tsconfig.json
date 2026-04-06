@@ -9,5 +9,5 @@
     "moduleResolution": "node16",
     "outDir": "./dist"
   },
-  "include": ["models/**/*", "src/**/*"]
+  "include": ["src/models/**/*", "src/**/*"]
 }

@@ -2,9 +2,9 @@ import { ModelOutputSchema, WeightConfigSchema } from './types';
 import { buildMultiCandidatePrompt } from './prompts';
 import { GeminiAiService } from './gemini';
 import { getJobWithApplicants } from './retrievers/mongoRetriever';
-import { ScreeningRunModel } from '../../models/ScreeningRun.model';
-import { ScreeningResultModel } from '../../models/ScreeningResult.model';
-import { SemanticCacheModel } from '../../models/SemanticCache.model';
+import { ScreeningRunModel } from '../models/ScreeningRun.model';
+import { ScreeningResultModel } from '../models/ScreeningResult.model';
+import { SemanticCacheModel } from '../models/SemanticCache.model';
 
 export interface OrchestratorOptions {
 	model?: string;

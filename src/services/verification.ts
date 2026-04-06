@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { VerificationTokenModel } from '../../models/VerificationToken.model';
+import { VerificationTokenModel } from '../models/VerificationToken.model';
 
 export function generateNumericCode(length = 6): string {
 	const digits = '0123456789';
