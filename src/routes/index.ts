@@ -50,7 +50,7 @@ export function registerRoutes(app: Express): void {
 	app.patch('/applications/:applicationId', requireAuth, ApplicationsController.update);
 
 	// Screening
-	app.post('/screening-runs', async (req: Request, res: Response) => {
+	app.post('/screening-runs', requireAuth, async (req: Request, res: Response) => {
 		try {
 			const { jobId, batchSize, topK, useCache, weightConfig } = req.body || {};
 			if (!jobId) {
@@ -61,15 +61,15 @@ export function registerRoutes(app: Express): void {
 				res.status(500).json({ message: 'GEMINI_API_KEY not configured' });
 				return;
 			}
-			const orch = new ScreeningOrchestrator(process.env.GEMINI_API_KEY);
-			const userId = (req as any).user?.id || 'system';
+			const orch = new ScreeningOrchestrator(process.env.GEMINI_API_KEY!);
+			const userId = req.user?.id || 'system';
 			const run = await orch.runForJob(jobId, userId, { topK: topK ?? batchSize, weightConfig, useCache });
 			res.status(202).json(run);
 		} catch (err: any) {
 			res.status(500).json({ message: err?.message ?? 'Failed to start screening' });
 		}
 	});
-	app.get('/screening-runs/:screeningRunId', async (req: Request, res: Response) => {
+	app.get('/screening-runs/:screeningRunId', requireAuth, async (req: Request, res: Response) => {
 		const run = await ScreeningRunModel.findById(req.params.screeningRunId).lean();
 		if (!run) {
 			res.status(404).json({ message: 'Not found' });
@@ -77,11 +77,11 @@ export function registerRoutes(app: Express): void {
 		}
 		res.json(run);
 	});
-	app.get('/screening-runs/:screeningRunId/results', async (req: Request, res: Response) => {
+	app.get('/screening-runs/:screeningRunId/results', requireAuth, async (req: Request, res: Response) => {
 		const results = await ScreeningResultModel.find({ screeningRun: req.params.screeningRunId }).sort({ rankPosition: 1 }).lean();
 		res.json(results);
 	});
-	app.get('/screening-results', async (req: Request, res: Response) => {
+	app.get('/screening-results', requireAuth, async (req: Request, res: Response) => {
 		const { jobId, top } = req.query as any;
 		if (!jobId) {
 			res.status(400).json({ message: 'jobId is required' });
