@@ -17,10 +17,7 @@ export const JobsController = {
 	},
 
 	async create(req: Request, res: Response): Promise<Response> {
-		if (!req.user) {
-			return res.status(401).json({ message: 'Unauthorized' });
-		}
-		const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user.id }).lean();
+		const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user!.id }).lean();
 		if (!recruiterProfile) {
 			return res.status(400).json({ message: 'Recruiter profile is required before creating jobs' });
 		}
@@ -52,9 +49,6 @@ export const JobsController = {
 
 	async update(req: Request, res: Response): Promise<Response> {
 		const jobId = String(req.params.jobId ?? '');
-		if (!req.user) {
-			return res.status(401).json({ message: 'Unauthorized' });
-		}
 		if (!mongoose.Types.ObjectId.isValid(jobId)) {
 			return res.status(400).json({ message: 'Invalid jobId' });
 		}
@@ -74,9 +68,6 @@ export const JobsController = {
 
 	async activate(req: Request, res: Response): Promise<Response> {
 		const jobId = String(req.params.jobId ?? '');
-		if (!req.user) {
-			return res.status(401).json({ message: 'Unauthorized' });
-		}
 		if (!mongoose.Types.ObjectId.isValid(jobId)) {
 			return res.status(400).json({ message: 'Invalid jobId' });
 		}
@@ -100,9 +91,6 @@ export const JobsController = {
 
 	async close(req: Request, res: Response): Promise<Response> {
 		const jobId = String(req.params.jobId ?? '');
-		if (!req.user) {
-			return res.status(401).json({ message: 'Unauthorized' });
-		}
 		if (!mongoose.Types.ObjectId.isValid(jobId)) {
 			return res.status(400).json({ message: 'Invalid jobId' });
 		}
