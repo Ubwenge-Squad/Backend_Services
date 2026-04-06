@@ -3,7 +3,6 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import { UserModel } from "../models/User.model";
-import id from "zod/v4/locales/id.js";
 dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
