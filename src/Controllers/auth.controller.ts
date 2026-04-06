@@ -65,9 +65,25 @@ export const AuthController ={
             if(!isPasswordMatch){
                 return res.status(401).json({message: "Invalid credentials"});
             }
-            
+            user.lastLogin = new Date();
+            await user.save();
+            const token = jwt.sign({
+                id: user._id,
+                email:user.email,
+                role:user.role
+            },JWT_SECRET!,{expiresIn:"7d"});
+            return res.status(200).json({message:"Login successful",
+                token,
+                user: {
+                    id:user._id,
+                    email:user.email,
+                    role:user.role,
+                    fullname:user.fullname
+                }
+            });
         } catch (error) {
-            
+            console.log("Login error", error);
+            return res.status(500).json({message:"Internal server error during login"});
         }
     }
 }
