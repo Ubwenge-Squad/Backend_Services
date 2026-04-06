@@ -1,16 +1,21 @@
 import { Express, Request, Response } from 'express';
 import multer from 'multer';
 import { ScreeningOrchestrator } from '../ai/orchestrator';
-import { ScreeningRunModel } from '../../models/ScreeningRun.model';
-import { ScreeningResultModel } from '../../models/ScreeningResult.model';
+import { ScreeningRunModel } from '../models/ScreeningRun.model';
+import { ScreeningResultModel } from '../models/ScreeningResult.model';
+import { AuthController } from '../Controllers/auth.controller';
+import { requireAuth } from '../middlewares/auth';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 export function registerRoutes(app: Express): void {
 	// Auth
-	app.post('/auth/register', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.post('/auth/login', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.get('/auth/me', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
+	app.post('/auth/register', AuthController.register);
+	app.post('/auth/login', AuthController.login);
+	app.get('/auth/me', requireAuth, (req: Request, res: Response) => {
+		// Example of using requireAuth
+		res.json({ user: req.user });
+	});
 	app.post('/auth/logout', (_req: Request, res: Response) => res.status(204).send());
 	app.post('/auth/verify', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
 	app.post('/auth/resend-code', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
