@@ -62,7 +62,9 @@ export const JobsController = {
 				return res.status(403).json({ message: 'Forbidden: you do not own this job' });
 			}
 		}
-		const updated = await JobModel.findByIdAndUpdate(jobId, req.body || {}, { new: true, runValidators: true }).lean();
+		const updates = { ...(req.body || {}) };
+		delete updates.recruiter;
+		const updated = await JobModel.findByIdAndUpdate(jobId, updates, { new: true, runValidators: true }).lean();
 		return res.json(updated);
 	},
 

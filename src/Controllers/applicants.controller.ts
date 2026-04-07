@@ -54,7 +54,9 @@ export const ApplicantsController = {
 		if (req.user?.role === 'applicant' && String(existing.user) !== req.user.id) {
 			return res.status(403).json({ message: 'Forbidden: you can only update your own profile' });
 		}
-		const updated = await ApplicantProfileModel.findByIdAndUpdate(applicantId, req.body || {}, {
+		const updates = { ...(req.body || {}) };
+		delete updates.user;
+		const updated = await ApplicantProfileModel.findByIdAndUpdate(applicantId, updates, {
 			new: true,
 			runValidators: true
 		}).lean();
