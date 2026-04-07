@@ -65,6 +65,12 @@ export const AuthController ={
             if(!user){
                 return res.status(401).json({message: "Invalid credentials"});
             }
+            if(user.deletedAt){
+                return res.status(403).json({message: "Account has been deleted"});
+            }
+            if(!user.isActive){
+                return res.status(403).json({message: "Account is deactivated"});
+            }
             const isPasswordMatch = await bcrypt.compare(password,user.passwordHash);
             if(!isPasswordMatch){
                 return res.status(401).json({message: "Invalid credentials"});
