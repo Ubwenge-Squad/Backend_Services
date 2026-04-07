@@ -29,13 +29,18 @@ export const ResumesController = {
 			}
 		}
 		const cloudinaryFile = await uploadResumeBuffer(uploadedFile.buffer, uploadedFile.originalname);
+		const isPrimary =
+			req.body.isPrimary === true ||
+			req.body.isPrimary === 'true' ||
+			req.body.isPrimary === 1 ||
+			req.body.isPrimary === '1';
 		const created = await ResumeModel.create({
 			applicant: applicantProfileId,
 			fileName: req.body.fileName || uploadedFile?.originalname || 'resume',
 			fileUrl: cloudinaryFile.secure_url,
 			fileSizeBytes: uploadedFile?.size,
 			mimeType: req.body.mimeType || uploadedFile?.mimetype || 'application/pdf',
-			isPrimary: Boolean(req.body.isPrimary)
+			isPrimary
 		});
 		return res.status(201).json(created);
 	},
