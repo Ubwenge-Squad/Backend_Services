@@ -56,8 +56,8 @@ export const JobsController = {
 		if (!existing) {
 			return res.status(404).json({ message: 'Job not found' });
 		}
-		if (req.user.role !== 'admin') {
-			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user.id }).lean();
+		if (req.user!.role !== 'admin') {
+			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user!.id }).lean();
 			if (!recruiterProfile || String(existing.recruiter) !== String(recruiterProfile._id)) {
 				return res.status(403).json({ message: 'Forbidden: you do not own this job' });
 			}
@@ -75,8 +75,8 @@ export const JobsController = {
 		if (!existing) {
 			return res.status(404).json({ message: 'Job not found' });
 		}
-		if (req.user.role !== 'admin') {
-			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user.id }).lean();
+		if (req.user!.role !== 'admin') {
+			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user!.id }).lean();
 			if (!recruiterProfile || String(existing.recruiter) !== String(recruiterProfile._id)) {
 				return res.status(403).json({ message: 'Forbidden: you do not own this job' });
 			}
@@ -98,8 +98,8 @@ export const JobsController = {
 		if (!existing) {
 			return res.status(404).json({ message: 'Job not found' });
 		}
-		if (req.user.role !== 'admin') {
-			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user.id }).lean();
+		if (req.user!.role !== 'admin') {
+			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user!.id }).lean();
 			if (!recruiterProfile || String(existing.recruiter) !== String(recruiterProfile._id)) {
 				return res.status(403).json({ message: 'Forbidden: you do not own this job' });
 			}
