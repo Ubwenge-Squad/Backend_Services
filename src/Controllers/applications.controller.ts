@@ -12,12 +12,15 @@ export const ApplicationsController = {
 		const jobId = typeof req.query.jobId === 'string' ? req.query.jobId : undefined;
 		const applicantId = typeof req.query.applicantId === 'string' ? req.query.applicantId : undefined;
 		const query: Record<string, unknown> = {};
+		let authenticatedApplicantId: string | undefined;
+		let recruiterOwnedJobIds: string[] | undefined;
 		if (req.user?.role === 'applicant') {
 			const profile = await ApplicantProfileModel.findOne({ user: req.user.id }).lean();
 			if (!profile) {
 				return res.json(toPaginatedResponse([], page, limit, 0));
 			}
-			query.applicant = profile._id;
+			authenticatedApplicantId = String(profile._id);
+			query.applicant = authenticatedApplicantId;
 		}
 		if (req.user?.role === 'recruiter') {
 			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user.id }).lean();
@@ -25,12 +28,19 @@ export const ApplicationsController = {
 				return res.status(400).json({ message: 'Recruiter profile not found' });
 			}
 			const ownedJobs = await JobModel.find({ recruiter: recruiterProfile._id }).select('_id').lean();
-			query.job = { $in: ownedJobs.map((job) => job._id) };
+			recruiterOwnedJobIds = ownedJobs.map((job) => String(job._id));
+			query.job = { $in: recruiterOwnedJobIds };
 		}
 		if (jobId && mongoose.Types.ObjectId.isValid(jobId)) {
+			if (req.user?.role === 'recruiter' && recruiterOwnedJobIds && !recruiterOwnedJobIds.includes(jobId)) {
+				return res.status(403).json({ message: 'Forbidden: you can only view applications for your jobs' });
+			}
 			query.job = jobId;
 		}
 		if (applicantId && mongoose.Types.ObjectId.isValid(applicantId)) {
+			if (req.user?.role === 'applicant' && authenticatedApplicantId && applicantId !== authenticatedApplicantId) {
+				return res.status(403).json({ message: 'Forbidden: you can only view your own applications' });
+			}
 			query.applicant = applicantId;
 		}
 		const [applications, total] = await Promise.all([
