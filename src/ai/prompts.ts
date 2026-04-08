@@ -11,9 +11,11 @@ export function buildMultiCandidatePrompt(params: PromptBuildParams): string {
 	const weight = WeightConfigSchema.partial().parse(params.weightConfig ?? { skills: 0.4, experience: 0.3, education: 0.1, relevance: 0.2 });
 	const sys = [
 		'You are an expert HR AI assisting recruiters. Evaluate candidates against the job,',
-		'produce JSON with fields: applicationId, fitScore(0-100), confidenceLevel, aiReasoning, strengths[], gaps[],',
-		'scoreBreakdown{skills,experience,education,relevance}, weightConfig, predictedJoinProbability(0-1), counterOfferRisk(0-1), adjacentRoles[], upskillingPaths[].',
-		'Return strictly valid JSON: {"results":[...]} with no markdown or prose.'
+		'Each candidate already has normalized fields {name, skills, experience, education, projects}.',
+		'You MUST score and rank all candidates relative to each other in one pass.',
+		'Return STRICT JSON only (no markdown):',
+		'[{"rank":1,"name":"...","score":0-100,"strengths":[],"gaps":[],"reason":"...","recommendation":"...","applicationId":"..."}]',
+		'No extra keys, no prose.'
 	].join(' ');
 	return [
 		sys,

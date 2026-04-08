@@ -3,6 +3,7 @@ import multer from 'multer';
 import { ScreeningOrchestrator } from '../ai/orchestrator';
 import { ScreeningRunModel } from '../models/ScreeningRun.model';
 import { ScreeningResultModel } from '../models/ScreeningResult.model';
+import { ScreeningSnapshotModel } from '../models/ScreeningSnapshot.model';
 import { AuthController } from '../Controllers/auth.controller';
 import { ApplicantsController } from '../Controllers/applicants.controller';
 import { ApplicationsController } from '../Controllers/applications.controller';
@@ -11,6 +12,7 @@ import { IngestionController } from '../Controllers/ingestion.controller';
 import { JobsController } from '../Controllers/jobs.controller';
 import { ResumesController } from '../Controllers/resumes.controller';
 import { requireAuth, requireRole } from '../middlewares/auth';
+import { getJobWithApplicants } from '../ai/retrievers/mongoRetriever';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -50,6 +52,30 @@ export function registerRoutes(app: Express): void {
 	app.patch('/applications/:applicationId', requireAuth, ApplicationsController.update);
 
 	// Screening
+	app.post('/screening/run', requireAuth, async (req: Request, res: Response) => {
+		try {
+			const { jobId, topK, useCache, weightConfig } = req.body || {};
+			if (!jobId) {
+				res.status(400).json({ message: 'jobId is required' });
+				return;
+			}
+			if (!process.env.GEMINI_API_KEY) {
+				res.status(500).json({ message: 'GEMINI_API_KEY not configured' });
+				return;
+			}
+			const orch = new ScreeningOrchestrator(process.env.GEMINI_API_KEY!);
+			const userId = req.user?.id || 'system';
+			const out = await orch.runForJob(jobId, userId, { topK, useCache, weightConfig });
+			res.status(200).json({
+				jobId,
+				screeningRunId: out.run._id,
+				results: out.results
+			});
+		} catch (err: any) {
+			res.status(500).json({ message: err?.message ?? 'Failed to run screening' });
+		}
+	});
+
 	app.post('/screening-runs', requireAuth, async (req: Request, res: Response) => {
 		try {
 			const { jobId, batchSize, topK, useCache, weightConfig } = req.body || {};
@@ -87,15 +113,27 @@ export function registerRoutes(app: Express): void {
 			res.status(400).json({ message: 'jobId is required' });
 			return;
 		}
-		// find latest completed run for job
-		const run = await ScreeningRunModel.findOne({ job: jobId, status: 'completed' }).sort({ completedAt: -1 }).lean();
-		if (!run) {
+		const snapshot = await ScreeningSnapshotModel.findOne({ jobId }).lean();
+		if (!snapshot) {
 			res.json([]);
 			return;
 		}
 		const limit = Number(top) || 20;
-		const results = await ScreeningResultModel.find({ screeningRun: run._id }).sort({ rankPosition: 1 }).limit(limit).lean();
-		res.json(results);
+		res.json((snapshot.results || []).slice(0, limit));
+	});
+	app.get('/screening/candidates', requireAuth, async (req: Request, res: Response) => {
+		const { jobId } = req.query as any;
+		if (!jobId) {
+			res.status(400).json({ message: 'jobId is required' });
+			return;
+		}
+		const { applicants } = await getJobWithApplicants(String(jobId));
+		res.json(
+			applicants.map((a) => ({
+				applicationId: a.applicationId,
+				...a.normalized
+			}))
+		);
 	});
 
 	// Bias
@@ -104,5 +142,6 @@ export function registerRoutes(app: Express): void {
 
 	// Ingestion (CSV/XLSX)
 	app.post('/ingestion/csv', requireAuth, requireRole(['recruiter', 'admin']), upload.single('file'), IngestionController.ingestCsv);
+	app.post('/ingestion/umurava', requireAuth, requireRole(['recruiter', 'admin']), IngestionController.ingestUmurava);
 }
 

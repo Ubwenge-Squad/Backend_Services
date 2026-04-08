@@ -18,6 +18,7 @@ export const WeightConfigSchema = z.object({
 
 export const CandidateEvaluationSchema = z.object({
 	applicationId: z.string(),
+	name: z.string().optional(),
 	fitScore: z.number().min(0).max(100),
 	rankPosition: z.number().int().optional(),
 	confidenceLevel: z.enum(['high', 'medium', 'low']),
@@ -36,6 +37,21 @@ export const ModelOutputSchema = z.object({
 	results: z.array(CandidateEvaluationSchema)
 });
 
+// Strict shortlist shape exposed to UI/API for final ranking output.
+export const RankedOutputItemSchema = z.object({
+	rank: z.number().int().positive(),
+	name: z.string().min(1),
+	score: z.number().min(0).max(100),
+	strengths: z.array(z.string()),
+	gaps: z.array(z.string()),
+	reason: z.string().min(1),
+	recommendation: z.string().min(1),
+	applicationId: z.string().optional()
+});
+
+export const RankedOutputSchema = z.array(RankedOutputItemSchema);
+
 export type CandidateEvaluation = z.infer<typeof CandidateEvaluationSchema>;
 export type ModelOutput = z.infer<typeof ModelOutputSchema>;
+export type RankedOutputItem = z.infer<typeof RankedOutputItemSchema>;
 
