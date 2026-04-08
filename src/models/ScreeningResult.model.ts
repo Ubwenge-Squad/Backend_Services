@@ -3,11 +3,13 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 export interface IScreeningResult extends Document {
   screeningRun: Types.ObjectId;
   application: Types.ObjectId;
+  candidateName?: string;
   rankPosition?: number;
   fitScore: number;
   baseScoreNoEdu?: number;
   confidenceLevel: 'high' | 'medium' | 'low';
   aiReasoning: string;
+  recommendation?: string;
   strengths: string[];
   gaps: string[];
   biasWarning?: string;
@@ -31,11 +33,13 @@ export interface IScreeningResult extends Document {
 const ScreeningResultSchema = new Schema<IScreeningResult>({
   screeningRun: { type: Schema.Types.ObjectId, ref: 'ScreeningRun', required: true, index: true },
   application: { type: Schema.Types.ObjectId, ref: 'Application', required: true },
+  candidateName: { type: String },
   rankPosition: { type: Number },
   fitScore: { type: Number, required: true, index: true },
   baseScoreNoEdu: { type: Number },
   confidenceLevel: { type: String, enum: ['high', 'medium', 'low'], default: 'medium' },
   aiReasoning: { type: String, required: true },
+  recommendation: { type: String },
   strengths: { type: [String], default: [] },
   gaps: { type: [String], default: [] },
   biasWarning: { type: String },

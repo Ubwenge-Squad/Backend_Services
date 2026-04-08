@@ -9,6 +9,7 @@ import { RecruiterProfileModel } from '../models/RecruiterProfile.model';
 import { UserModel } from '../models/User.model';
 import { ApplicantProfileModel } from '../models/ApplicantProfile.model';
 import { ApplicationModel } from '../models/Application.model';
+import { normalizeApplicantFromExternal } from '../ai/normalized';
 
 const RowSchema = z.object({
 	name: z.string().min(1),
@@ -93,6 +94,86 @@ function parseXlsxBuffer(buf: Buffer): Record<string, unknown>[] {
 }
 
 export const IngestionController = {
+	async ingestUmurava(req: Request, res: Response): Promise<Response> {
+		const jobId = String(req.body?.jobId ?? '');
+		const profiles = Array.isArray(req.body?.profiles) ? req.body.profiles : [];
+		if (!jobId || !mongoose.Types.ObjectId.isValid(jobId)) {
+			return res.status(400).json({ message: 'Valid jobId is required' });
+		}
+		if (!profiles.length) {
+			return res.status(400).json({ message: 'profiles array is required' });
+		}
+		const job = await JobModel.findById(jobId).lean();
+		if (!job) return res.status(404).json({ message: 'Job not found' });
+
+		if (req.user?.role === 'recruiter') {
+			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user.id }).lean();
+			if (!recruiterProfile) return res.status(400).json({ message: 'Recruiter profile not found' });
+			if (String(job.recruiter) !== String(recruiterProfile._id)) {
+				return res.status(403).json({ message: 'Forbidden: you can only ingest for your own jobs' });
+			}
+		}
+
+		let acceptedRows = 0;
+		let rejectedRows = 0;
+
+		for (let i = 0; i < profiles.length; i++) {
+			try {
+				const p = profiles[i] as Record<string, unknown>;
+				const normalized = normalizeApplicantFromExternal({
+					name: String(p.name ?? ''),
+					skills: Array.isArray(p.skills) ? p.skills.map((x) => String(x)) : [],
+					experience: typeof p.experience === 'number' ? p.experience : Number(p.experience ?? 0),
+					education: String(p.education ?? 'Not specified'),
+					projects: Array.isArray(p.projects) ? p.projects.map((x) => String(x)) : []
+				});
+
+				const email = String(p.email ?? `umurava+${jobId}+${i + 1}@intore.local`).toLowerCase();
+				let user = await UserModel.findOne({ email }).lean();
+				if (!user) {
+					const passwordHash = await bcrypt.hash(`umurava:${jobId}:${i}:${Date.now()}`, 10);
+					user = await UserModel.create({
+						email,
+						passwordHash,
+						role: 'applicant',
+						fullName: normalized.name,
+						isActive: true,
+						emailVerified: false,
+						lastLoginAt: new Date()
+					}).then((u) => u.toObject());
+				}
+
+				let profile = await ApplicantProfileModel.findOne({ user: user._id }).lean();
+				if (!profile) {
+					profile = await ApplicantProfileModel.create({
+						user: user._id,
+						skills: normalized.skills,
+						yearsOfExperience: normalized.experience,
+						education: normalized.education ? [{ institution: 'Umurava Import', degree: normalized.education }] : [],
+						workExperience: normalized.projects.map((proj) => ({ company: 'Umurava', position: 'Project', description: proj }))
+					}).then((x) => x.toObject());
+				}
+
+				try {
+					await ApplicationModel.create({
+						job: new mongoose.Types.ObjectId(jobId),
+						applicant: profile._id,
+						status: 'submitted',
+						submittedAt: new Date(),
+						ingestionSource: 'platform'
+					} as any);
+				} catch (err: any) {
+					if (err?.code !== 11000) throw err;
+				}
+				acceptedRows += 1;
+			} catch {
+				rejectedRows += 1;
+			}
+		}
+
+		return res.status(202).json({ jobId, acceptedRows, rejectedRows });
+	},
+
 	async ingestCsv(req: Request, res: Response): Promise<Response> {
 		if (!req.file) {
 			return res.status(400).json({ message: 'CSV file is required' });

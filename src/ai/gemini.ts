@@ -30,6 +30,12 @@ export class GeminiAiService {
 		return json;
 	}
 
+	async answerWithPrompt(prompt: string): Promise<string> {
+		const model = this.genAI.getGenerativeModel({ model: this.modelName });
+		const result = await model.generateContent(prompt);
+		return result.response.text();
+	}
+
 	private extractJson(text: string): unknown {
 		// Try direct JSON parse
 		try {
