@@ -22,8 +22,8 @@ export function registerRoutes(app: Express): void {
 		res.json({ user: req.user });
 	});
 	app.post('/auth/logout', (_req: Request, res: Response) => res.status(204).send());
-	app.post('/auth/verify', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
-	app.post('/auth/resend-code', (_req: Request, res: Response) => res.status(501).json({ message: 'Not implemented' }));
+	app.post('/auth/verify', AuthController.verify);
+	app.post('/auth/resend-code', AuthController.resendCode);
 
 	// Jobs
 	app.get('/jobs', JobsController.list);
