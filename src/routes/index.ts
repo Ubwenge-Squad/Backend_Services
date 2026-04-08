@@ -13,6 +13,8 @@ import { JobsController } from '../Controllers/jobs.controller';
 import { ResumesController } from '../Controllers/resumes.controller';
 import { requireAuth, requireRole } from '../middlewares/auth';
 import { getJobWithApplicants } from '../ai/retrievers/mongoRetriever';
+import { buildRecruiterQaPrompt } from '../ai/prompts';
+import { GeminiAiService } from '../ai/gemini';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -134,6 +136,36 @@ export function registerRoutes(app: Express): void {
 				...a.normalized
 			}))
 		);
+	});
+	app.post('/screening/ask', requireAuth, async (req: Request, res: Response) => {
+		try {
+			const { jobId, question } = req.body || {};
+			if (!jobId || !question) {
+				res.status(400).json({ message: 'jobId and question are required' });
+				return;
+			}
+			if (!process.env.GEMINI_API_KEY) {
+				res.status(500).json({ message: 'GEMINI_API_KEY not configured' });
+				return;
+			}
+			const snapshot = await ScreeningSnapshotModel.findOne({ jobId }).lean();
+			if (!snapshot) {
+				res.status(400).json({ message: 'No screening results found for this job yet. Run screening first.' });
+				return;
+			}
+			const { job, applicants } = await getJobWithApplicants(String(jobId));
+			const prompt = buildRecruiterQaPrompt({
+				job,
+				results: snapshot.results || [],
+				candidates: applicants.map((a) => a.normalized),
+				question: String(question)
+			});
+			const ai = new GeminiAiService(process.env.GEMINI_API_KEY, { model: 'gemini-1.5-pro' });
+			const answer = await ai.answerWithPrompt(prompt);
+			res.json({ answer });
+		} catch (err: any) {
+			res.status(500).json({ message: err?.message ?? 'Failed to answer question' });
+		}
 	});
 
 	// Bias
