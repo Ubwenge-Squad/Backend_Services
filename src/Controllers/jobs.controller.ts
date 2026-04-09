@@ -8,7 +8,16 @@ export const JobsController = {
 	async list(req: Request, res: Response): Promise<Response> {
 		const { page, limit, skip } = parsePagination(req);
 		const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-		const query = status ? { status } : {};
+
+		// Scope to the authenticated recruiter's own jobs
+		const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user!.id }).lean();
+		if (!recruiterProfile) {
+			return res.json(toPaginatedResponse([], page, limit, 0));
+		}
+
+		const query: Record<string, unknown> = { recruiter: recruiterProfile._id };
+		if (status) query.status = status;
+
 		const [jobs, total] = await Promise.all([
 			JobModel.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
 			JobModel.countDocuments(query)
@@ -43,6 +52,13 @@ export const JobsController = {
 		const job = await JobModel.findById(jobId).lean();
 		if (!job) {
 			return res.status(404).json({ message: 'Job not found' });
+		}
+		// Verify the requester owns this job (admins bypass)
+		if (req.user!.role !== 'admin') {
+			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user!.id }).lean();
+			if (!recruiterProfile || String(job.recruiter) !== String(recruiterProfile._id)) {
+				return res.status(403).json({ message: 'Forbidden: you do not own this job' });
+			}
 		}
 		return res.json(job);
 	},
