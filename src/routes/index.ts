@@ -30,9 +30,9 @@ export function registerRoutes(app: Express): void {
 	app.post('/auth/resend-code', AuthController.resendCode);
 
 	// Jobs
-	app.get('/jobs', JobsController.list);
+	app.get('/jobs', requireAuth, requireRole(['recruiter', 'admin']), JobsController.list);
 	app.post('/jobs', requireAuth, requireRole(['recruiter', 'admin']), JobsController.create);
-	app.get('/jobs/:jobId', JobsController.getById);
+	app.get('/jobs/:jobId', requireAuth, requireRole(['recruiter', 'admin']), JobsController.getById);
 	app.patch('/jobs/:jobId', requireAuth, requireRole(['recruiter', 'admin']), JobsController.update);
 	app.post('/jobs/:jobId/activate', requireAuth, requireRole(['recruiter', 'admin']), JobsController.activate);
 	app.post('/jobs/:jobId/close', requireAuth, requireRole(['recruiter', 'admin']), JobsController.close);
@@ -140,14 +140,43 @@ export function registerRoutes(app: Express): void {
 	app.post('/screening/ask', requireAuth, async (req: Request, res: Response) => {
 		try {
 			const { jobId, question } = req.body || {};
-			if (!jobId || !question) {
-				res.status(400).json({ message: 'jobId and question are required' });
+			if (!question) {
+				res.status(400).json({ message: 'question is required' });
 				return;
 			}
 			if (!process.env.GEMINI_API_KEY) {
 				res.status(500).json({ message: 'GEMINI_API_KEY not configured' });
 				return;
 			}
+			const ai = new GeminiAiService(process.env.GEMINI_API_KEY, { model: 'gemini-1.5-pro' });
+
+			// General context: no specific job or jobId === 'general'
+			if (!jobId || jobId === 'general') {
+				// Try to find the most recent snapshot for this recruiter's jobs
+				const latestSnapshot = await ScreeningSnapshotModel.findOne().sort({ updatedAt: -1 }).lean();
+				if (!latestSnapshot) {
+					const generalPrompt = [
+						'You are Intore AI, an expert recruiter assistant for Rwanda-based hiring.',
+						'No screening data is available yet. Answer the recruiter\'s question helpfully and suggest next steps.',
+						`Question: ${String(question)}`
+					].join('\n');
+					const answer = await ai.answerWithPrompt(generalPrompt);
+					res.json({ answer });
+					return;
+				}
+				const { job, applicants } = await getJobWithApplicants(String(latestSnapshot.jobId));
+				const prompt = buildRecruiterQaPrompt({
+					job,
+					results: latestSnapshot.results || [],
+					candidates: applicants.map((a) => a.normalized),
+					question: String(question)
+				});
+				const answer = await ai.answerWithPrompt(prompt);
+				res.json({ answer });
+				return;
+			}
+
+			// Job-specific context
 			const snapshot = await ScreeningSnapshotModel.findOne({ jobId }).lean();
 			if (!snapshot) {
 				res.status(400).json({ message: 'No screening results found for this job yet. Run screening first.' });
@@ -160,7 +189,6 @@ export function registerRoutes(app: Express): void {
 				candidates: applicants.map((a) => a.normalized),
 				question: String(question)
 			});
-			const ai = new GeminiAiService(process.env.GEMINI_API_KEY, { model: 'gemini-1.5-pro' });
 			const answer = await ai.answerWithPrompt(prompt);
 			res.json({ answer });
 		} catch (err: any) {
