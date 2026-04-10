@@ -8,12 +8,10 @@ export const ScoreBreakdownSchema = z.object({
 });
 
 export const WeightConfigSchema = z.object({
-	skills: z.number().min(0).max(1),
-	experience: z.number().min(0).max(1),
-	education: z.number().min(0).max(1),
-	relevance: z.number().min(0).max(1)
-}).refine((w) => Math.abs(w.skills + w.experience + w.education + w.relevance - 1) < 1e-6, {
-	message: 'Weights must sum to 1'
+	skills:     z.number().min(0).max(1).default(0.4),
+	experience: z.number().min(0).max(1).default(0.3),
+	education:  z.number().min(0).max(1).default(0.1),
+	relevance:  z.number().min(0).max(1).default(0.2),
 });
 
 export const CandidateEvaluationSchema = z.object({

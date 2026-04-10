@@ -53,7 +53,7 @@ export function registerRoutes(app: Express): void {
 	app.post('/applications', requireAuth, ApplicationsController.create);
 	app.patch('/applications/:applicationId', requireAuth, ApplicationsController.update);
 
-	// Screening
+	// Legacy Screening
 	app.post('/screening/run', requireAuth, async (req: Request, res: Response) => {
 		try {
 			const { jobId, topK, useCache, weightConfig } = req.body || {};
@@ -74,6 +74,7 @@ export function registerRoutes(app: Express): void {
 				results: out.results
 			});
 		} catch (err: any) {
+			console.error('[/screening/run] error:', err);
 			res.status(500).json({ message: err?.message ?? 'Failed to run screening' });
 		}
 	});
@@ -148,7 +149,7 @@ export function registerRoutes(app: Express): void {
 				res.status(500).json({ message: 'GEMINI_API_KEY not configured' });
 				return;
 			}
-			const ai = new GeminiAiService(process.env.GEMINI_API_KEY, { model: 'gemini-1.5-pro' });
+			const ai = new GeminiAiService(process.env.GEMINI_API_KEY, { model: 'gemini-2.5-flash' });
 
 			// General context: no specific job or jobId === 'general'
 			if (!jobId || jobId === 'general') {

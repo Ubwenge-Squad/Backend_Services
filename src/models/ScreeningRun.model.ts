@@ -23,7 +23,7 @@ const ScreeningRunSchema = new Schema<IScreeningRun>({
   batchSize: { type: Number, default: 20 },
   totalCandidates: { type: Number, default: 0 },
   processedCount: { type: Number, default: 0 },
-  modelVersion: { type: String, default: 'gemini-1.5-pro' },
+  modelVersion: { type: String, default: 'gemini-2.5-flash' },
   startedAt: { type: Date },
   completedAt: { type: Date },
   errorMessage: { type: String },

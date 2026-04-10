@@ -16,9 +16,9 @@ const RowSchema = z.object({
 	email: z.string().email().optional(),
 	phoneNumber: z.string().optional(),
 	skills: z.array(z.string()).default([]),
-	linkedinUrl: z.string().url().optional(),
-	githubUrl: z.string().url().optional(),
-	portfolioUrl: z.string().url().optional(),
+	linkedinUrl: z.string().optional(),
+	githubUrl: z.string().optional(),
+	portfolioUrl: z.string().optional(),
 	yearsOfExperience: z.number().optional(),
 });
 
@@ -46,7 +46,7 @@ function getCell(row: Record<string, unknown>, keys: string[]): unknown {
 }
 
 function normalizeRow(row: Record<string, unknown>, idx: number, jobId: string) {
-	const name = String(getCell(row, ['name', 'full name', 'candidate name']) ?? '').trim();
+	const name = String(getCell(row, ['name', 'full name', 'candidate name', 'Name', 'Full Name', 'Candidate Name']) ?? '').trim() || `Candidate ${idx + 1}`;
 	const emailRaw = String(getCell(row, ['email', 'email address']) ?? '').trim();
 	const phoneNumber = String(getCell(row, ['phone', 'phone number', 'mobile']) ?? '').trim();
 	const skills = splitSkills(getCell(row, ['skills', 'skill', 'tech stack', 'stack']));
@@ -175,6 +175,7 @@ export const IngestionController = {
 	},
 
 	async ingestCsv(req: Request, res: Response): Promise<Response> {
+		try {
 		if (!req.file) {
 			return res.status(400).json({ message: 'CSV file is required' });
 		}
@@ -211,8 +212,6 @@ export const IngestionController = {
 		let acceptedRows = 0;
 		let rejectedRows = 0;
 
-		// Create per-row: User -> ApplicantProfile -> Application(job, applicantProfile)
-		// Note: This is synchronous for simplicity. Later we can queue a worker.
 		for (let i = 0; i < rows.length; i++) {
 			try {
 				const normalized = normalizeRow(rows[i], i, jobId);
@@ -220,7 +219,6 @@ export const IngestionController = {
 
 				let user = await UserModel.findOne({ email }).lean();
 				if (!user) {
-					// Imported applicants are created as role=applicant with a random password hash.
 					const passwordHash = await bcrypt.hash(`imported:${jobId}:${i}:${Date.now()}`, 10);
 					user = await UserModel.create({
 						email,
@@ -245,7 +243,6 @@ export const IngestionController = {
 						portfolioUrl: normalized.portfolioUrl
 					}).then((p) => p.toObject());
 				} else {
-					// Light merge: append new skills and fill missing fields.
 					const mergedSkills = Array.from(new Set([...(profile.skills || []), ...(normalized.skills || [])]));
 					await ApplicantProfileModel.updateOne(
 						{ _id: profile._id },
@@ -261,7 +258,6 @@ export const IngestionController = {
 					);
 				}
 
-				// Create application (ignore duplicates)
 				try {
 					await ApplicationModel.create({
 						job: new mongoose.Types.ObjectId(jobId),
@@ -271,20 +267,20 @@ export const IngestionController = {
 						ingestionSource: 'csv'
 					} as any);
 				} catch (err: any) {
-					// Duplicate (unique index job+applicant) => treat as accepted
 					if (err?.code !== 11000) throw err;
 				}
 
 				acceptedRows += 1;
 			} catch (e) {
+				console.error(`[ingestCsv] row ${i} failed:`, e);
 				rejectedRows += 1;
 			}
 		}
 
-		return res.status(202).json({
-			jobId,
-			acceptedRows,
-			rejectedRows
-		});
+		return res.status(202).json({ jobId, acceptedRows, rejectedRows });
+		} catch (err: any) {
+			console.error('[ingestCsv] unhandled error:', err);
+			return res.status(500).json({ message: err?.message ?? 'Internal server error during ingestion' });
+		}
 	}
 };
