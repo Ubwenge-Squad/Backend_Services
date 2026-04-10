@@ -95,9 +95,9 @@ export class AiScreeningService {
     this.model = this.genAI.getGenerativeModel({ 
       model: 'gemini-2.5-flash',
       generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 8192,
-        responseMimeType: "application/json"
+        temperature: 0.3,
+        maxOutputTokens: 16384,
+        responseMimeType: "text/plain"
       }
     });
   }
@@ -114,23 +114,10 @@ export class AiScreeningService {
       const response = result.response;
       const text = response.text();
       
-      // Parse JSON response
-      let aiResponse;
-      try {
-        aiResponse = JSON.parse(text);
-      } catch (parseError) {
-        console.error('Failed to parse AI response as JSON:', parseError);
-        console.error('Raw response:', text);
-        
-        // Retry once
-        const retryResult = await this.model.generateContent(prompt);
-        const retryText = retryResult.response.text();
-        aiResponse = JSON.parse(retryText);
-      }
-
-      // Validate and transform response
-      const shortlist = aiResponse.shortlist || [];
-      const screeningSummary = aiResponse.screeningSummary || 'AI screening completed successfully.';
+      // Parse human-friendly text response
+      const parsedResponse = this.parseHumanFriendlyResponse(text);
+      const shortlist = parsedResponse.candidates;
+      const screeningSummary = parsedResponse.summary || 'AI screening completed successfully.';
 
       // Ensure all required fields are present and valid
       const validatedShortlist = shortlist.map((candidate: any, index: number) => ({
@@ -297,40 +284,141 @@ For EACH candidate, perform this detailed analysis:
    - "Consider" (60-79): Viable candidate, worth interviewing
    - "Borderline" (<60): Limited fit, interview only if desperate
 
-RESPONSE FORMAT (Return valid JSON only):
-{
-  "shortlist": [
-    {
-      "candidateIndex": number,
-      "name": string,
-      "rank": number,
-      "matchScore": number,
-      "scoreBreakdown": {
-        "skills": number,
-        "experience": number,
-        "education": number,
-        "projectsAndCerts": number,
-        "availability": number
-      },
-      "strengths": string[],
-      "gaps": string[],
-      "recommendation": string,
-      "reasoning": string,
-      "finalVerdict": "Strong Hire" | "Hire" | "Consider" | "Borderline"
+RESPONSE FORMAT (Provide a comprehensive, human-readable analysis):
+
+**SCREENING SUMMARY**
+[Brief overview of the candidate pool and key findings]
+
+**TOP CANDIDATES RANKING**
+
+For each candidate, provide:
+
+**Rank [Number]: [Candidate Name] - [Match Score]% - [Final Verdict]**
+
+**Detailed Analysis:**
+- **Skills Match:** [Score]/40 - [Detailed assessment of skills alignment]
+- **Experience:** [Score]/30 - [Experience relevance and progression analysis]
+- **Education:** [Score]/15 - [Educational background evaluation]
+- **Projects & Certifications:** [Score]/10 - [Portfolio and credentials assessment]
+- **Availability:** [Score]/5 - [Location and schedule compatibility]
+
+**Key Strengths:**
+- [List 3-5 specific strengths with examples]
+
+**Areas for Development:**
+- [List 2-3 gaps or areas needing improvement]
+
+**Comprehensive Reasoning:**
+[Detailed paragraph explaining WHY this candidate received their score, including specific examples from their profile, red flags (if any), and overall fit assessment]
+
+**Recommendation:**
+[2-3 sentence recruiter-friendly summary with interview priority]
+
+---
+
+Provide this analysis for the top ${shortlistSize} candidates ranked by match score (highest first). Make the analysis thorough, evidence-based, and easy for recruiters to understand and act upon.
+
+Evaluate ALL ${candidates.length} candidates comprehensively and provide detailed rankings with human-readable analysis for the top ${shortlistSize} candidates.`;
+  }
+
+  private parseHumanFriendlyResponse(text: string): { candidates: ScreenedCandidate[], summary: string } {
+    const candidates: ScreenedCandidate[] = [];
+    let summary = '';
+
+    // Extract summary
+    const summaryMatch = text.match(/\*\*SCREENING SUMMARY\*\*([\s\S]*?)(?=\*\*TOP CANDIDATES|\*\*Rank|\*\*|$)/i);
+    if (summaryMatch) {
+      summary = summaryMatch[1].trim();
     }
-  ],
-  "screeningSummary": string
-}
 
-IMPORTANT: 
-- Be thorough and analytical in your evaluation
-- Provide specific, evidence-based reasoning
-- Consider the holistic candidate profile
-- Rank by total match score (highest first)
-- Return only the top ${shortlistSize} candidates
-- Ensure scores reflect the detailed analysis above
+    // Extract candidate sections
+    const candidateSections = text.split(/\*\*Rank \d+:/);
+    
+    candidateSections.forEach((section, index) => {
+      if (index === 0) return; // Skip first section (before first rank)
+      
+      const candidate: Partial<ScreenedCandidate> = {
+        candidateIndex: index - 1,
+        rank: index,
+        strengths: [],
+        gaps: [],
+        scoreBreakdown: { skills: 0, experience: 0, education: 0, projectsAndCerts: 0, availability: 0 }
+      };
 
-Evaluate ALL ${candidates.length} candidates comprehensively and return the JSON response with the top ${shortlistSize} candidates ranked by match score, with detailed reasoning for each evaluation.`;
+      // Extract name and score
+      const headerMatch = section.match(/([^-\n]+)\s*-\s*(\d+)%?\s*-\s*(.+?)(?=\*\*|$)/);
+      if (headerMatch) {
+        candidate.name = headerMatch[1].trim();
+        candidate.matchScore = parseInt(headerMatch[2]) || 0;
+        candidate.finalVerdict = this.parseVerdict(headerMatch[3]);
+      }
+
+      // Extract score breakdown
+      const skillsMatch = section.match(/\*\*Skills Match:\*\*\s*(\d+)\/40/);
+      const experienceMatch = section.match(/\*\*Experience:\*\*\s*(\d+)\/30/);
+      const educationMatch = section.match(/\*\*Education:\*\*\s*(\d+)\/15/);
+      const projectsMatch = section.match(/\*\*Projects & Certifications:\*\*\s*(\d+)\/10/);
+      const availabilityMatch = section.match(/\*\*Availability:\*\*\s*(\d+)\/5/);
+
+      candidate.scoreBreakdown = {
+        skills: parseInt(skillsMatch?.[1]) || 0,
+        experience: parseInt(experienceMatch?.[1]) || 0,
+        education: parseInt(educationMatch?.[1]) || 0,
+        projectsAndCerts: parseInt(projectsMatch?.[1]) || 0,
+        availability: parseInt(availabilityMatch?.[1]) || 0
+      };
+
+      // Extract strengths
+      const strengthsMatch = section.match(/\*\*Key Strengths:\*\*([\s\S]*?)(?=\*\*Areas|\*\*Comprehensive|\*\*Recommendation|$)/i);
+      if (strengthsMatch) {
+        candidate.strengths = this.extractBulletPoints(strengthsMatch[1]);
+      }
+
+      // Extract gaps
+      const gapsMatch = section.match(/\*\*Areas for Development:\*\*([\s\S]*?)(?=\*\*Comprehensive|\*\*Recommendation|$)/i);
+      if (gapsMatch) {
+        candidate.gaps = this.extractBulletPoints(gapsMatch[1]);
+      }
+
+      // Extract reasoning
+      const reasoningMatch = section.match(/\*\*Comprehensive Reasoning:\*\*([\s\S]*?)(?=\*\*Recommendation|$)/i);
+      if (reasoningMatch) {
+        candidate.reasoning = reasoningMatch[1].trim();
+      }
+
+      // Extract recommendation
+      const recommendationMatch = section.match(/\*\*Recommendation:\*\*([\s\S]*?)(?=\*\*|$)/i);
+      if (recommendationMatch) {
+        candidate.recommendation = recommendationMatch[1].trim();
+      }
+
+      candidates.push(candidate as ScreenedCandidate);
+    });
+
+    return { candidates, summary };
+  }
+
+  private parseVerdict(text: string): "Strong Hire" | "Hire" | "Consider" | "Borderline" {
+    const cleanText = text.toLowerCase().trim();
+    if (cleanText.includes('strong hire')) return 'Strong Hire';
+    if (cleanText.includes('hire')) return 'Hire';
+    if (cleanText.includes('consider')) return 'Consider';
+    if (cleanText.includes('borderline')) return 'Borderline';
+    return 'Consider';
+  }
+
+  private extractBulletPoints(text: string): string[] {
+    const lines = text.split('\n').filter(line => line.trim());
+    const bulletPoints: string[] = [];
+    
+    lines.forEach(line => {
+      const cleaned = line.replace(/^[-*]\s*/, '').trim();
+      if (cleaned && !cleaned.startsWith('**')) {
+        bulletPoints.push(cleaned);
+      }
+    });
+    
+    return bulletPoints;
   }
 }
 

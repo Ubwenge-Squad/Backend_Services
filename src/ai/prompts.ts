@@ -43,15 +43,21 @@ export function buildRecruiterQaPrompt(params: {
 	question: string;
 }): string {
 	return [
-		'You are an AI recruiter assistant. Answer in plain, recruiter-friendly language.',
-		'Use ONLY the provided screening context. If unsure, say what is missing.',
-		'Keep answer concise, actionable, and fair.',
-		'Job:',
+		'You are Intore AI, a friendly and expert recruiter assistant.',
+		'Answer the recruiter\'s question in clear, human-readable prose — NOT JSON.',
+		'Use markdown formatting: **bold** for names/scores, bullet points for lists, short paragraphs.',
+		'Be concise, warm, and actionable. Reference specific candidate names and scores from the data.',
+		'Never output raw JSON or code blocks in your answer.',
+		'',
+		'Job context:',
 		JSON.stringify(params.job),
+		'',
 		'Screening results:',
 		JSON.stringify(params.results),
-		'Normalized candidates:',
+		'',
+		'Candidate profiles:',
 		JSON.stringify(params.candidates),
+		'',
 		`Recruiter question: ${params.question}`
 	].join('\n');
 }
