@@ -17,7 +17,7 @@ export interface OrchestratorOptions {
 export class ScreeningOrchestrator {
 	private ai: GeminiAiService;
 
-	constructor(apiKey: string, model = 'gemini-1.5-pro') {
+	constructor(apiKey: string, model = 'gemini-2.5-flash') {
 		this.ai = new GeminiAiService(apiKey, { model });
 	}
 
@@ -52,7 +52,7 @@ export class ScreeningOrchestrator {
 			status: 'processing',
 			batchSize: opts?.topK ?? job.screeningBatchSize ?? 20,
 			totalCandidates: applicants.length,
-			modelVersion: 'gemini-1.5-pro',
+			modelVersion: 'gemini-2.5-flash',
 			startedAt: new Date()
 		});
 
@@ -103,7 +103,7 @@ export class ScreeningOrchestrator {
 						$set: {
 							queryText: prompt,
 							responseText: JSON.stringify(parsed),
-							modelVersion: 'gemini-1.5-pro',
+							modelVersion: 'gemini-2.5-flash',
 							expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
 						},
 						$inc: { hitCount: 1 }
@@ -118,6 +118,7 @@ export class ScreeningOrchestrator {
 			await run.save();
 			return { run, results: sorted };
 		} catch (err: any) {
+			console.error('Orchestrator error:', err);
 			run.status = 'failed';
 			run.errorMessage = err?.message ?? 'Unknown error';
 			run.completedAt = new Date();

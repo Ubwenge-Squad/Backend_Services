@@ -12,7 +12,7 @@ export class GeminiAiService {
 
 	constructor(apiKey: string, config?: Partial<ScreeningPromptConfig>) {
 		this.genAI = new GoogleGenerativeAI(apiKey);
-		this.modelName = config?.model || 'gemini-1.5-pro';
+		this.modelName = config?.model || 'gemini-2.5-flash';
 	}
 
 	// Convenience: build prompt internally with defaults
@@ -23,7 +23,10 @@ export class GeminiAiService {
 	}
 
 	async evaluateWithPrompt(prompt: string): Promise<unknown> {
-		const model = this.genAI.getGenerativeModel({ model: this.modelName });
+		const model = this.genAI.getGenerativeModel({ 
+			model: this.modelName, 
+			generationConfig: { responseMimeType: 'application/json' } 
+		});
 		const result = await model.generateContent(prompt);
 		const text = result.response.text();
 		const json = this.extractJson(text);
@@ -31,38 +34,41 @@ export class GeminiAiService {
 	}
 
 	async answerWithPrompt(prompt: string): Promise<string> {
-		const model = this.genAI.getGenerativeModel({ model: this.modelName });
+		const model = this.genAI.getGenerativeModel({ 
+			model: this.modelName, 
+			generationConfig: { responseMimeType: 'application/json' } 
+		});
 		const result = await model.generateContent(prompt);
 		return result.response.text();
 	}
 
 	private extractJson(text: string): unknown {
-		// Try direct JSON parse
-		try {
-			return JSON.parse(text);
-		} catch (_) {
-			// Try fenced code block
-			const fence = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(text);
-			if (fence && fence[1]) {
-				try {
-					return JSON.parse(fence[1]);
-				} catch (_) {
-					// fallthrough
-				}
-			}
-			// Try to locate first { ... } block
-			const start = text.indexOf('{');
-			const end = text.lastIndexOf('}');
-			if (start !== -1 && end !== -1 && end > start) {
-				const slice = text.slice(start, end + 1);
-				try {
-					return JSON.parse(slice);
-				} catch (_) {
-					// give up
-				}
-			}
-			throw new Error('Failed to parse model JSON output');
-		}
-	}
+  // Try direct parse first
+  try {
+    return JSON.parse(text);
+  } catch (_) {}
+
+  // Try fenced code block
+  const fence = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(text);
+  if (fence?.[1]) {
+    try { return JSON.parse(fence[1]); } catch (_) {}
+  }
+
+  // Try array first [ ... ]
+  const arrStart = text.indexOf('[');
+  const arrEnd = text.lastIndexOf(']');
+  if (arrStart !== -1 && arrEnd > arrStart) {
+    try { return JSON.parse(text.slice(arrStart, arrEnd + 1)); } catch (_) {}
+  }
+
+  // Fallback to object { ... }
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(text.slice(start, end + 1)); } catch (_) {}
+  }
+
+  throw new Error('Failed to parse model JSON output');
+}
 }
 

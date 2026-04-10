@@ -8,7 +8,12 @@ export interface PromptBuildParams {
 }
 
 export function buildMultiCandidatePrompt(params: PromptBuildParams): string {
-	const weight = WeightConfigSchema.partial().parse(params.weightConfig ?? { skills: 0.4, experience: 0.3, education: 0.1, relevance: 0.2 });
+	const weight = WeightConfigSchema.parse(params.weightConfig ?? {
+		skills: 0.4,
+		experience: 0.3,
+		education: 0.2,
+		relevance: 0.1
+	});
 	const sys = [
 		'You are an expert HR AI assisting recruiters. Evaluate candidates against the job.',
 		'Each candidate already has normalized fields {name, skills, experience, education, projects}.',

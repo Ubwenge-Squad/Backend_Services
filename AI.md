@@ -70,7 +70,7 @@ Manages the full screening lifecycle for a job.
 **Options**
 ```typescript
 {
-  model?: string;           // default: 'gemini-1.5-pro'
+  model?: string;           // default: 'gemini-2.5-flash'
   topK?: number;            // candidates to return (default: 20)
   weightConfig?: {
     skills: number;         // default: 0.4
@@ -205,6 +205,6 @@ This powers the floating AI chat FAB on all dashboard pages.
 
 ## Model
 
-Default model: `gemini-1.5-pro`
+Default model: `gemini-2.5-flash`
 
 Can be overridden per orchestrator instance or per request via `opts.model`.
