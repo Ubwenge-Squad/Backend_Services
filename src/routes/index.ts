@@ -20,7 +20,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 
 export function registerRoutes(app: Express): void {
 	// Auth
-	app.post('	', AuthController.register);
+	app.post('/auth/register', AuthController.register);
 	app.post('/auth/login', AuthController.login);
 	app.get('/auth/me', requireAuth, (req: Request, res: Response) => {
 		res.json({ user: req.user });
