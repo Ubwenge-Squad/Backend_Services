@@ -130,39 +130,65 @@ export const AuthController ={
 
     async login(req: Request, res: Response) {
         try {
-            const jwtSecret = process.env.JWT_SECRET!;
-            const {email,password} = req.body;
-            if(!email || !password){
-                return res.status(400).json({message:"All fields are required"});
+            const {email, password} = req.body;
+            if (!email || !password) {
+                return res.status(400).json({ message: "All fields are required" });
             }
-            const user = await UserModel.findOne({email});
-            if(!user){
-                return res.status(401).json({message: "Invalid credentials"});
+            const user = await UserModel.findOne({ email });
+            if (!user) {
+                return res.status(401).json({ message: "Invalid credentials" });
             }
-            if(user.deletedAt){
-                return res.status(403).json({message: "Account has been deleted"});
+            if (user.deletedAt) {
+                return res.status(403).json({ message: "Account has been deleted" });
             }
-            if(!user.isActive){
-                return res.status(403).json({message: "Account is deactivated"});
+            if (!user.isActive) {
+                return res.status(403).json({ message: "Account is deactivated" });
             }
-            if(!user.emailVerified){
-                return res.status(403).json({message: "Email not verified. Please verify your account."});
+            if (!user.emailVerified) {
+                return res.status(403).json({ message: "Email not verified. Please verify your account." });
             }
-            const isPasswordMatch = await bcrypt.compare(password,user.passwordHash);
-            if(!isPasswordMatch){
-                return res.status(401).json({message: "Invalid credentials"});
+            const isPasswordMatch = await bcrypt.compare(password, user.passwordHash);
+            if (!isPasswordMatch) {
+                return res.status(401).json({ message: "Invalid credentials" });
             }
-            user.lastLoginAt = new Date();
-            await user.save();
 
-            const payload: AuthUser = {
-                id: user._id.toString(),
+            // Issue login OTP — do not return token yet
+            const code = await issueVerificationCode(String(email).toLowerCase(), "login_otp", 10);
+            return res.status(200).json({
+                otpRequired: true,
                 email: user.email,
-                role: user.role
-            };
+                message: "OTP sent to your email. Please verify to complete login.",
+                ...(process.env.NODE_ENV !== "production" ? { devCode: code } : {})
+            });
+        } catch (error) {
+            console.log("Login error", error);
+            return res.status(500).json({ message: "Internal server error during login" });
+        }
+    },
 
+    async verifyLoginOtp(req: Request, res: Response) {
+        try {
+            const jwtSecret = process.env.JWT_SECRET!;
+            const { email, code } = req.body || {};
+            if (!email || !code) {
+                return res.status(400).json({ message: "email and code are required" });
+            }
+            const ok = await consumeVerificationCode(String(email).toLowerCase(), "login_otp", String(code));
+            if (!ok) {
+                return res.status(400).json({ message: "Invalid or expired OTP. Please try again." });
+            }
+            const user = await UserModel.findOneAndUpdate(
+                { email: String(email).toLowerCase() },
+                { $set: { lastLoginAt: new Date() } },
+                { new: true }
+            );
+            if (!user) {
+                return res.status(404).json({ message: "User not found" });
+            }
+            const payload: AuthUser = { id: user._id.toString(), email: user.email, role: user.role };
             const token = jwt.sign(payload, jwtSecret, { expiresIn: "7d" });
-            return res.status(200).json({message:"Login successful",
+            return res.status(200).json({
+                message: "Login successful",
                 token,
                 user: {
                     id: user._id.toString(),
@@ -172,8 +198,8 @@ export const AuthController ={
                 }
             });
         } catch (error) {
-            console.log("Login error", error);
-            return res.status(500).json({message:"Internal server error during login"});
+            console.log("Verify login OTP error", error);
+            return res.status(500).json({ message: "Internal server error during OTP verification" });
         }
     }
 }

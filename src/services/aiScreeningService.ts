@@ -361,11 +361,11 @@ Evaluate ALL ${candidates.length} candidates comprehensively and provide detaile
       const availabilityMatch = section.match(/\*\*Availability:\*\*\s*(\d+)\/5/);
 
       candidate.scoreBreakdown = {
-        skills: parseInt(skillsMatch?.[1]) || 0,
-        experience: parseInt(experienceMatch?.[1]) || 0,
-        education: parseInt(educationMatch?.[1]) || 0,
-        projectsAndCerts: parseInt(projectsMatch?.[1]) || 0,
-        availability: parseInt(availabilityMatch?.[1]) || 0
+        skills: parseInt(skillsMatch?.[1] ?? '0') || 0,
+        experience: parseInt(experienceMatch?.[1] ?? '0') || 0,
+        education: parseInt(educationMatch?.[1] ?? '0') || 0,
+        projectsAndCerts: parseInt(projectsMatch?.[1] ?? '0') || 0,
+        availability: parseInt(availabilityMatch?.[1] ?? '0') || 0
       };
 
       // Extract strengths

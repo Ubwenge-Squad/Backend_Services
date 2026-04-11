@@ -34,11 +34,17 @@ export async function sendMail(params: { to: string; subject: string; text: stri
 	});
 }
 
-export function buildVerificationEmail(args: { code: string; purpose: 'register' | 'reset_password'; ttlMinutes: number }) {
-	const title = args.purpose === 'register' ? 'Verify your Intore account' : 'Reset your Intore password';
+export function buildVerificationEmail(args: { code: string; purpose: 'register' | 'reset_password' | 'login_otp'; ttlMinutes: number }) {
+	const title = args.purpose === 'register'
+		? 'Verify your Intore account'
+		: args.purpose === 'login_otp'
+			? 'Your Intore login code'
+			: 'Reset your Intore password';
 	const subtitle = args.purpose === 'register'
 		? 'Use this code to verify your email address:'
-		: 'Use this code to reset your password:';
+		: args.purpose === 'login_otp'
+			? 'Use this one-time code to complete your sign in:'
+			: 'Use this code to reset your password:';
 
 	const text = `${title}\n\n${subtitle}\n\n${args.code}\n\nThis code expires in ${args.ttlMinutes} minutes.`;
 	const html = `
