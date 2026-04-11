@@ -1,38 +1,28 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
-function requireEnv(name: string): string {
-	const v = process.env[name];
-	if (!v) throw new Error(`${name} is required for email sending`);
-	return v;
-}
-
-export function createTransport() {
-	const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-	const port = Number(process.env.SMTP_PORT || 587);
-	const secure = port === 465; // true only for port 465, false for 587 (STARTTLS)
-	const user = requireEnv('SMTP_USER');
-	const pass = requireEnv('SMTP_PASS');
-
-	return nodemailer.createTransport({
-		host,
-		port,
-		secure,
-		auth: { user, pass },
-		tls: { rejectUnauthorized: false }
-	});
+function getResendClient(): Resend {
+	const apiKey = process.env.RESEND_API_KEY;
+	if (!apiKey) throw new Error('RESEND_API_KEY is required for email sending');
+	return new Resend(apiKey);
 }
 
 export async function sendMail(params: { to: string; subject: string; text: string; html?: string }) {
-	const transport = createTransport();
+	// If no Resend key, log and skip (dev mode)
+	if (!process.env.RESEND_API_KEY) {
+		console.log(`[sendMail] No RESEND_API_KEY — skipping email to ${params.to}: ${params.subject}`);
+		return;
+	}
+	const resend = getResendClient();
 	const fromName = process.env.MAIL_FROM_NAME || 'Intore';
-	const fromEmail = process.env.MAIL_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@intore.local';
-	return transport.sendMail({
+	const fromEmail = process.env.MAIL_FROM_EMAIL || 'onboarding@resend.dev';
+	const { error } = await resend.emails.send({
 		from: `${fromName} <${fromEmail}>`,
 		to: params.to,
 		subject: params.subject,
 		text: params.text,
-		html: params.html
+		html: params.html,
 	});
+	if (error) throw new Error(error.message);
 }
 
 export function buildVerificationEmail(args: { code: string; purpose: 'register' | 'reset_password' | 'login_otp'; ttlMinutes: number }) {
