@@ -5,31 +5,30 @@ import dotenv from "dotenv";
 import { UserModel } from "../models/User.model";
 import { AuthUser } from "../middlewares/auth";
 import { RecruiterProfileModel } from "../models/RecruiterProfile.model";
-import { issueVerificationCode, consumeVerificationCode } from "../services/verification";
 dotenv.config();
 
-export const AuthController ={
+export const AuthController = {
     async register(req: Request, res: Response) {
         try {
             const jwtSecret = process.env.JWT_SECRET!;
             const { email, password, fullName, fullname, phoneNumber, role, companyName } = req.body;
             const name = fullName || fullname;
-            const requestedRole = role || "applicant";
-            if(!email || !password || !name || !phoneNumber){
-                return res.status(400).json({message:"email, password, fullName, phoneNumber are required"});
+            const requestedRole = role || "recruiter";
+            if (!email || !password || !name || !phoneNumber) {
+                return res.status(400).json({ message: "email, password, fullName, phoneNumber are required" });
             }
-            if(!["applicant","recruiter","admin"].includes(requestedRole)){
-                return res.status(400).json({message:"Invalid role"});
+            if (!["applicant", "recruiter", "admin"].includes(requestedRole)) {
+                return res.status(400).json({ message: "Invalid role" });
             }
-            if(requestedRole === "recruiter" && !companyName){
-                return res.status(400).json({message:"companyName is required for recruiter accounts"});
+            if (requestedRole === "recruiter" && !companyName) {
+                return res.status(400).json({ message: "companyName is required for recruiter accounts" });
             }
-            const existingUser = await UserModel.findOne({email});
-            if(existingUser){
-                return res.status(409).json({message:"User already exists"});
+            const existingUser = await UserModel.findOne({ email });
+            if (existingUser) {
+                return res.status(409).json({ message: "User already exists" });
             }
             const salt = await bcrypt.genSalt(10);
-            const passwordHash = await bcrypt.hash(password,salt);
+            const passwordHash = await bcrypt.hash(password, salt);
 
             const newUser = await UserModel.create({
                 email,
@@ -38,7 +37,7 @@ export const AuthController ={
                 phoneNumber,
                 role: requestedRole,
                 isActive: true,
-                emailVerified: false,
+                emailVerified: true, // skip email verification
                 lastLoginAt: new Date()
             });
 
@@ -49,15 +48,12 @@ export const AuthController ={
                 });
             }
 
-            const code = await issueVerificationCode(String(email).toLowerCase(), "register", 15);
-
-            // Do not issue auth token until verified.
+            // Issue token immediately — no email verification required
+            const payload: AuthUser = { id: newUser._id.toString(), email: newUser.email, role: newUser.role };
+            const token = jwt.sign(payload, jwtSecret, { expiresIn: "7d" });
             return res.status(201).json({
-                message: "User created. Verification required.",
-                verificationRequired: true,
-                email: newUser.email,
-                // For local/dev convenience only (email is also sent when SMTP is configured).
-                ...(process.env.NODE_ENV !== "production" ? { devCode: code } : {}),
+                message: "Account created successfully.",
+                token,
                 user: {
                     id: newUser._id.toString(),
                     email: newUser.email,
@@ -67,70 +63,14 @@ export const AuthController ={
             });
         } catch (error) {
             console.log("Registration error", error);
-            return res.status(500).json({message:"Internal server error during registration"});
-        }
-    },
-
-    async verify(req: Request, res: Response) {
-        try {
-            const jwtSecret = process.env.JWT_SECRET!;
-            const { email, code } = req.body || {};
-            if (!email || !code) {
-                return res.status(400).json({ message: "email and code are required" });
-            }
-            const ok = await consumeVerificationCode(String(email).toLowerCase(), "register", String(code));
-            if (!ok) {
-                return res.status(400).json({ message: "Invalid or expired verification code" });
-            }
-            const user = await UserModel.findOneAndUpdate(
-                { email: String(email).toLowerCase() },
-                { $set: { emailVerified: true } },
-                { new: true }
-            );
-            if (!user) {
-                return res.status(404).json({ message: "User not found" });
-            }
-            const payload: AuthUser = { id: user._id.toString(), email: user.email, role: user.role };
-            const token = jwt.sign(payload, jwtSecret, { expiresIn: "7d" });
-            return res.status(200).json({
-                verified: true,
-                token,
-                user: {
-                    id: user._id.toString(),
-                    email: user.email,
-                    role: user.role,
-                    fullName: user.fullName
-                }
-            });
-        } catch (error) {
-            console.log("Verify error", error);
-            return res.status(500).json({ message: "Internal server error during verification" });
-        }
-    },
-
-    async resendCode(req: Request, res: Response) {
-        try {
-            const { email, purpose } = req.body || {};
-            if (!email || !purpose) {
-                return res.status(400).json({ message: "email and purpose are required" });
-            }
-            if (purpose !== "register" && purpose !== "reset_password") {
-                return res.status(400).json({ message: "Invalid purpose" });
-            }
-            const code = await issueVerificationCode(String(email).toLowerCase(), purpose, 15);
-            return res.status(200).json({
-                ok: true,
-                ...(process.env.NODE_ENV !== "production" ? { devCode: code } : {})
-            });
-        } catch (error) {
-            console.log("Resend code error", error);
-            return res.status(500).json({ message: "Internal server error during resend" });
+            return res.status(500).json({ message: "Internal server error during registration" });
         }
     },
 
     async login(req: Request, res: Response) {
         try {
-            const {email, password} = req.body;
+            const jwtSecret = process.env.JWT_SECRET!;
+            const { email, password } = req.body;
             if (!email || !password) {
                 return res.status(400).json({ message: "All fields are required" });
             }
@@ -144,47 +84,13 @@ export const AuthController ={
             if (!user.isActive) {
                 return res.status(403).json({ message: "Account is deactivated" });
             }
-            if (!user.emailVerified) {
-                return res.status(403).json({ message: "Email not verified. Please verify your account." });
-            }
             const isPasswordMatch = await bcrypt.compare(password, user.passwordHash);
             if (!isPasswordMatch) {
                 return res.status(401).json({ message: "Invalid credentials" });
             }
+            user.lastLoginAt = new Date();
+            await user.save();
 
-            // Issue login OTP — do not return token yet
-            const code = await issueVerificationCode(String(email).toLowerCase(), "login_otp", 10);
-            return res.status(200).json({
-                otpRequired: true,
-                email: user.email,
-                message: "OTP sent to your email. Please verify to complete login.",
-                ...(process.env.NODE_ENV !== "production" ? { devCode: code } : {})
-            });
-        } catch (error) {
-            console.log("Login error", error);
-            return res.status(500).json({ message: "Internal server error during login" });
-        }
-    },
-
-    async verifyLoginOtp(req: Request, res: Response) {
-        try {
-            const jwtSecret = process.env.JWT_SECRET!;
-            const { email, code } = req.body || {};
-            if (!email || !code) {
-                return res.status(400).json({ message: "email and code are required" });
-            }
-            const ok = await consumeVerificationCode(String(email).toLowerCase(), "login_otp", String(code));
-            if (!ok) {
-                return res.status(400).json({ message: "Invalid or expired OTP. Please try again." });
-            }
-            const user = await UserModel.findOneAndUpdate(
-                { email: String(email).toLowerCase() },
-                { $set: { lastLoginAt: new Date() } },
-                { new: true }
-            );
-            if (!user) {
-                return res.status(404).json({ message: "User not found" });
-            }
             const payload: AuthUser = { id: user._id.toString(), email: user.email, role: user.role };
             const token = jwt.sign(payload, jwtSecret, { expiresIn: "7d" });
             return res.status(200).json({
@@ -198,8 +104,8 @@ export const AuthController ={
                 }
             });
         } catch (error) {
-            console.log("Verify login OTP error", error);
-            return res.status(500).json({ message: "Internal server error during OTP verification" });
+            console.log("Login error", error);
+            return res.status(500).json({ message: "Internal server error during login" });
         }
     }
 }
