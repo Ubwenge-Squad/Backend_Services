@@ -1,4 +1,4 @@
-# Intore Backend — API Service
+# Intore Backend  API Service
 
 Express + TypeScript REST API powering the Intore recruitment platform.
 
@@ -130,6 +130,6 @@ See [`API.md`](./API.md) for the full reference.
 
 ## Swagger / OpenAPI
 
-Interactive API docs available at `http://localhost:4000/docs` when the server is running.
+Interactive API docs available at `http://backend_api:4000/docs` when the server is running.
 
 The spec file is at `openapi.yaml` in the project root.
