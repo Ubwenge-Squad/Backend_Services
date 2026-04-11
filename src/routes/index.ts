@@ -28,6 +28,7 @@ export function registerRoutes(app: Express): void {
 	app.post('/auth/logout', (_req: Request, res: Response) => res.status(204).send());
 	app.post('/auth/verify', AuthController.verify);
 	app.post('/auth/resend-code', AuthController.resendCode);
+	app.post('/auth/verify-login-otp', AuthController.verifyLoginOtp);
 
 	// Jobs
 	app.get('/jobs', requireAuth, requireRole(['recruiter', 'admin']), JobsController.list);

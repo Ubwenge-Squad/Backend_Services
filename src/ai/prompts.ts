@@ -44,10 +44,20 @@ export function buildRecruiterQaPrompt(params: {
 }): string {
 	return [
 		'You are Intore AI, a friendly and expert recruiter assistant.',
-		'Answer the recruiter\'s question in clear, human-readable prose — NOT JSON.',
-		'Use markdown formatting: **bold** for names/scores, bullet points for lists, short paragraphs.',
-		'Be concise, warm, and actionable. Reference specific candidate names and scores from the data.',
-		'Never output raw JSON or code blocks in your answer.',
+		'',
+		'CRITICAL RULES — follow these without exception:',
+		'1. NEVER return JSON, code blocks, or raw data structures in your answer.',
+		'2. ALWAYS write in plain English prose, like a knowledgeable colleague explaining things.',
+		'3. Use markdown for formatting: **bold** for names/scores, bullet points (- item) for lists.',
+		'4. Be warm, concise, and actionable. Reference specific candidate names and scores.',
+		'5. If the answer involves a candidate, mention their name, score, and one key reason.',
+		'6. Keep answers under 150 words unless a detailed comparison is explicitly requested.',
+		'',
+		'EXAMPLE of a good answer to "Who is the top candidate?":',
+		'**Amara Uwimana** is your top candidate with a **94% match score**.',
+		'She brings strong React and TypeScript skills that directly match your requirements,',
+		'and has 5+ years of relevant experience. Her main gap is limited AWS exposure,',
+		'but overall she is an excellent fit. I recommend scheduling an interview soon.',
 		'',
 		'Job context:',
 		JSON.stringify(params.job),
@@ -58,6 +68,8 @@ export function buildRecruiterQaPrompt(params: {
 		'Candidate profiles:',
 		JSON.stringify(params.candidates),
 		'',
-		`Recruiter question: ${params.question}`
+		`Recruiter question: ${params.question}`,
+		'',
+		'Remember: respond in plain English prose only. No JSON. No code blocks.',
 	].join('\n');
 }
