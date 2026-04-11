@@ -61,6 +61,12 @@ app.get('/health', (_req, res) => {
 	res.json({ status: 'ok' });
 });
 
+// Request logger — logs method, path, and body to Render logs
+app.use((req, _res, next) => {
+	console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`, JSON.stringify(req.body ?? {}));
+	next();
+});
+
 // Swagger UI
 const openapiPath = path.join(__dirname, '..', 'openapi.yaml');
 const swaggerDoc = YAML.load(openapiPath);
@@ -71,6 +77,15 @@ registerCoreMiddlewares(app);
 
 // Register routes
 registerRoutes(app);
+
+// Global error handler — catches any unhandled errors and returns JSON
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+	console.error('[Unhandled error]', err);
+	res.status(err.status || 500).json({
+		message: err.message || 'Internal server error',
+		...(process.env.NODE_ENV !== 'production' ? { stack: err.stack } : {})
+	});
+});
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
 

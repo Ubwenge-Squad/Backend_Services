@@ -16,16 +16,14 @@ export async function issueVerificationCode(email: string, purpose: 'register' |
 	const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
 	await VerificationTokenModel.create({ email, code, purpose, expiresAt });
 
-	// Best-effort email sending. If SMTP is not configured, we still issue the code
-	// (useful for local/dev), but production should configure SMTP.
+	// Best-effort email sending — never block registration/login on email failure.
+	// The code is always returned so the caller can surface it (devCode in non-prod).
 	try {
 		const msg = buildVerificationEmail({ code, purpose, ttlMinutes });
 		await sendMail({ to: email, subject: msg.subject, text: msg.text, html: msg.html });
 	} catch (err) {
-		if (process.env.NODE_ENV === 'production') {
-			// In production, failing to send the code should be a hard failure.
-			throw err;
-		}
+		console.error(`[issueVerificationCode] Email send failed for ${email} (${purpose}):`, err);
+		// Do NOT re-throw — the code is already saved in DB, user can still verify.
 	}
 	return code;
 }

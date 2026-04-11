@@ -8,8 +8,8 @@ function requireEnv(name: string): string {
 
 export function createTransport() {
 	const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-	const port = Number(process.env.SMTP_PORT || 465);
-	const secure = String(process.env.SMTP_SECURE || 'true') === 'true';
+	const port = Number(process.env.SMTP_PORT || 587);
+	const secure = port === 465; // true only for port 465, false for 587 (STARTTLS)
 	const user = requireEnv('SMTP_USER');
 	const pass = requireEnv('SMTP_PASS');
 
@@ -17,7 +17,8 @@ export function createTransport() {
 		host,
 		port,
 		secure,
-		auth: { user, pass }
+		auth: { user, pass },
+		tls: { rejectUnauthorized: false }
 	});
 }
 
