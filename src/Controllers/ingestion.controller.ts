@@ -11,6 +11,16 @@ import { ApplicantProfileModel } from '../models/ApplicantProfile.model';
 import { ApplicationModel } from '../models/Application.model';
 import { normalizeApplicantFromExternal } from '../ai/normalized';
 
+function computeCompleteness(n: { skills: any[]; experience: any[]; education: any[]; projects: any[] }): number {
+	let score = 0;
+	if (n.skills.length > 0) score += 25;
+	if (n.experience.length > 0) score += 30;
+	if (n.education.length > 0) score += 20;
+	if (n.projects.length > 0) score += 15;
+	if (n.skills.length >= 3) score += 10;
+	return Math.min(score, 100);
+}
+
 const RowSchema = z.object({
 	name: z.string().min(1),
 	email: z.string().email().optional(),
@@ -121,11 +131,17 @@ export const IngestionController = {
 			try {
 				const p = profiles[i] as Record<string, unknown>;
 				const normalized = normalizeApplicantFromExternal({
-					name: String(p.name ?? ''),
-					skills: Array.isArray(p.skills) ? p.skills.map((x) => String(x)) : [],
-					experience: typeof p.experience === 'number' ? p.experience : Number(p.experience ?? 0),
-					education: String(p.education ?? 'Not specified'),
-					projects: Array.isArray(p.projects) ? p.projects.map((x) => String(x)) : []
+					name: String(p.name ?? [p.firstName, p.lastName].filter(Boolean).join(' ') ?? ''),
+					firstName: String(p.firstName ?? ''),
+					lastName: String(p.lastName ?? ''),
+					headline: String(p.headline ?? ''),
+					location: String(p.location ?? ''),
+					skills: p.skills,
+					experience: Array.isArray(p.experience) ? p.experience : [],
+					education: Array.isArray(p.education) ? p.education : [],
+					projects: Array.isArray(p.projects) ? p.projects : [],
+					certifications: Array.isArray(p.certifications) ? p.certifications : [],
+					availability: p.availability as any
 				});
 
 				const email = String(p.email ?? `umurava+${jobId}+${i + 1}@intore.local`).toLowerCase();
@@ -138,7 +154,7 @@ export const IngestionController = {
 						role: 'applicant',
 						fullName: normalized.name,
 						isActive: true,
-						emailVerified: false,
+						emailVerified: true,
 						lastLoginAt: new Date()
 					}).then((u) => u.toObject());
 				}
@@ -147,10 +163,20 @@ export const IngestionController = {
 				if (!profile) {
 					profile = await ApplicantProfileModel.create({
 						user: user._id,
+						firstName: String(p.firstName ?? normalized.name.split(' ')[0] ?? ''),
+						lastName: String(p.lastName ?? normalized.name.split(' ').slice(1).join(' ') ?? ''),
+						email,
+						headline: normalized.headline,
+						location: normalized.location,
 						skills: normalized.skills,
-						yearsOfExperience: normalized.experience,
-						education: normalized.education ? [{ institution: 'Umurava Import', degree: normalized.education }] : [],
-						workExperience: normalized.projects.map((proj) => ({ company: 'Umurava', position: 'Project', description: proj }))
+						experience: normalized.experience,
+						education: normalized.education,
+						projects: normalized.projects,
+						certifications: (normalized.certifications || []).map((name) => ({ name, issuer: '', issueDate: '' })),
+						availability: normalized.availability,
+						socialLinks: (p.socialLinks as any) || {},
+						source: 'umurava',
+						profileCompleteness: computeCompleteness(normalized)
 					}).then((x) => x.toObject());
 				}
 
@@ -234,28 +260,48 @@ export const IngestionController = {
 
 				let profile = await ApplicantProfileModel.findOne({ user: user._id }).lean();
 				if (!profile) {
+					const skillObjects = normalized.skills.map((s) => ({ name: s, level: 'Intermediate' as const, yearsOfExperience: 0 }));
 					profile = await ApplicantProfileModel.create({
 						user: user._id,
-						skills: normalized.skills,
-						yearsOfExperience: normalized.yearsOfExperience,
-						linkedinUrl: normalized.linkedinUrl,
-						githubUrl: normalized.githubUrl,
-						portfolioUrl: normalized.portfolioUrl
+						firstName: normalized.name.split(' ')[0] || normalized.name,
+						lastName: normalized.name.split(' ').slice(1).join(' ') || '',
+						email: normalized.email!,
+						headline: skillObjects.slice(0, 3).map((s) => s.name).join(', '),
+						location: '',
+						skills: skillObjects,
+						experience: normalized.yearsOfExperience ? [{
+							company: 'Previous employer',
+							role: 'Professional',
+							startDate: '',
+							endDate: 'Present',
+							description: '',
+							technologies: skillObjects.map((s) => s.name),
+							isCurrent: true
+						}] : [],
+						education: [],
+						projects: [],
+						certifications: [],
+						availability: { status: 'Available', type: 'Full-time' },
+						socialLinks: {
+							linkedin: normalized.linkedinUrl,
+							github: normalized.githubUrl,
+							portfolio: normalized.portfolioUrl
+						},
+						source: 'external',
+						profileCompleteness: skillObjects.length > 0 ? 40 : 10
 					}).then((p) => p.toObject());
 				} else {
-					const mergedSkills = Array.from(new Set([...(profile.skills || []), ...(normalized.skills || [])]));
-					await ApplicantProfileModel.updateOne(
-						{ _id: profile._id },
-						{
-							$set: {
-								skills: mergedSkills,
-								yearsOfExperience: profile.yearsOfExperience ?? normalized.yearsOfExperience,
-								linkedinUrl: profile.linkedinUrl ?? normalized.linkedinUrl,
-								githubUrl: profile.githubUrl ?? normalized.githubUrl,
-								portfolioUrl: profile.portfolioUrl ?? normalized.portfolioUrl
-							}
-						}
-					);
+					// Merge new skills in
+					const existingNames = new Set((profile.skills as any[]).map((s: any) => s.name));
+					const newSkills = normalized.skills
+						.filter((s) => !existingNames.has(s))
+						.map((s) => ({ name: s, level: 'Intermediate' as const, yearsOfExperience: 0 }));
+					if (newSkills.length) {
+						await ApplicantProfileModel.updateOne(
+							{ _id: profile._id },
+							{ $push: { skills: { $each: newSkills } } }
+						);
+					}
 				}
 
 				try {

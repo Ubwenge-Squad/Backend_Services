@@ -161,7 +161,7 @@ export class AiScreeningService {
     candidates: CandidateProfile[], 
     shortlistSize: number
   ): string {
-    return `You are an expert AI recruitment assistant with deep expertise in talent evaluation, technical assessment, and hiring best practices. Your task is to conduct a comprehensive evaluation of candidates for a specific job and return a detailed, ranked shortlist with thorough reasoning.
+    return `You are an expert AI recruitment assistant with deep expertise in talent evaluation, technical assessment, and recruiting best practices. Your task is to conduct a comprehensive evaluation of candidates for a specific job and return a detailed, ranked shortlist with thorough reasoning.
 
 JOB DETAILS:
 - Title: ${job.title}

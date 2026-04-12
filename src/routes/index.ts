@@ -15,6 +15,8 @@ import { requireAuth, requireRole } from '../middlewares/auth';
 import { getJobWithApplicants } from '../ai/retrievers/mongoRetriever';
 import { buildRecruiterQaPrompt } from '../ai/prompts';
 import { GeminiAiService } from '../ai/gemini';
+import { RecruiterProfileModel } from '../models/RecruiterProfile.model';
+import { JobModel } from '../models/Job.model';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -114,6 +116,15 @@ export function registerRoutes(app: Express): void {
 			res.status(400).json({ message: 'jobId is required' });
 			return;
 		}
+		// Verify the job belongs to this recruiter
+		const recruiterProfile2 = await RecruiterProfileModel.findOne({ user: req.user!.id }).lean();
+		if (recruiterProfile2) {
+			const job = await JobModel.findOne({ _id: jobId, recruiter: recruiterProfile2._id }).lean();
+			if (!job) {
+				res.status(403).json({ message: 'Access denied.' });
+				return;
+			}
+		}
 		const snapshot = await ScreeningSnapshotModel.findOne({ jobId }).lean();
 		if (!snapshot) {
 			res.json([]);
@@ -148,15 +159,25 @@ export function registerRoutes(app: Express): void {
 				return;
 			}
 			const ai = new GeminiAiService(process.env.GEMINI_API_KEY, { model: 'gemini-2.5-flash' });
+			const recruiterId = req.user!.id;
+
+			// Resolve the recruiter's own job IDs for scoping
+			const recruiterProfile = await RecruiterProfileModel.findOne({ user: recruiterId }).lean();
+			const myJobIds = recruiterProfile
+				? (await JobModel.find({ recruiter: recruiterProfile._id }).select('_id').lean()).map((j: any) => String(j._id))
+				: [];
 
 			// General context: no specific job or jobId === 'general'
 			if (!jobId || jobId === 'general') {
-				// Try to find the most recent snapshot for this recruiter's jobs
-				const latestSnapshot = await ScreeningSnapshotModel.findOne().sort({ updatedAt: -1 }).lean();
+				// Only look at snapshots for THIS recruiter's jobs
+				const latestSnapshot = myJobIds.length
+					? await ScreeningSnapshotModel.findOne({ jobId: { $in: myJobIds } }).sort({ updatedAt: -1 }).lean()
+					: null;
+
 				if (!latestSnapshot) {
 					const generalPrompt = [
-						'You are Intore AI, an expert recruiter assistant for Rwanda-based hiring.',
-						'No screening data is available yet. Answer the recruiter\'s question helpfully and suggest next steps.',
+						'You are Intore AI, an expert recruiter assistant for Rwanda-based recruiting.',
+						'No screening data is available yet for this recruiter. Answer helpfully and suggest next steps.',
 						`Question: ${String(question)}`
 					].join('\n');
 					const answer = await ai.answerWithPrompt(generalPrompt);
@@ -175,7 +196,12 @@ export function registerRoutes(app: Express): void {
 				return;
 			}
 
-			// Job-specific context
+			// Job-specific context — verify the job belongs to this recruiter
+			if (!myJobIds.includes(String(jobId))) {
+				res.status(403).json({ message: 'You do not have access to this job.' });
+				return;
+			}
+
 			const snapshot = await ScreeningSnapshotModel.findOne({ jobId }).lean();
 			if (!snapshot) {
 				res.status(400).json({ message: 'No screening results found for this job yet. Run screening first.' });
@@ -192,6 +218,124 @@ export function registerRoutes(app: Express): void {
 			res.json({ answer });
 		} catch (err: any) {
 			res.status(500).json({ message: err?.message ?? 'Failed to answer question' });
+		}
+	});
+
+	// ── Recruiter decisions ──────────────────────────────────────────────────
+	// Save a thumbs up/down for a candidate in a screening
+	app.patch('/screening/decision', requireAuth, async (req: Request, res: Response) => {
+		try {
+			const { jobId, applicationId, decision, note } = req.body || {};
+			if (!jobId || !applicationId || !decision) {
+				res.status(400).json({ message: 'jobId, applicationId, decision are required' });
+				return;
+			}
+			if (!['approved', 'rejected', 'pending'].includes(decision)) {
+				res.status(400).json({ message: 'decision must be approved, rejected, or pending' });
+				return;
+			}
+			// Verify ownership
+			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user!.id }).lean();
+			if (recruiterProfile) {
+				const job = await JobModel.findOne({ _id: jobId, recruiter: recruiterProfile._id }).lean();
+				if (!job) { res.status(403).json({ message: 'Access denied.' }); return; }
+			}
+			const update: Record<string, any> = {
+				[`decisions.${applicationId}.decision`]: decision,
+				[`decisions.${applicationId}.decidedAt`]: new Date(),
+				[`decisions.${applicationId}.decidedBy`]: req.user!.id,
+			};
+			if (note !== undefined) update[`decisions.${applicationId}.note`] = note;
+			const snapshot = await ScreeningSnapshotModel.findOneAndUpdate(
+				{ jobId },
+				{ $set: update },
+				{ new: true }
+			).lean();
+			if (!snapshot) { res.status(404).json({ message: 'No screening found for this job.' }); return; }
+
+			// Ask Gemini to react to the decision
+			if (process.env.GEMINI_API_KEY) {
+				const ai = new GeminiAiService(process.env.GEMINI_API_KEY, { model: 'gemini-2.5-flash' });
+				const candidate = (snapshot.results as any[]).find((r: any) => r.applicationId === applicationId);
+				const prompt = [
+					'You are Intore AI, a friendly recruiter assistant.',
+					`The recruiter just marked candidate "${candidate?.name || applicationId}" as "${decision}".`,
+					`Their AI score was ${candidate?.score ?? '?'}% with recommendation: ${candidate?.recommendation ?? '?'}.`,
+					decision === 'approved'
+						? 'Briefly affirm this choice in 1-2 sentences, mentioning one key strength.'
+						: decision === 'rejected'
+							? 'Briefly acknowledge this in 1-2 sentences, mentioning the key gap that likely drove the decision.'
+							: 'Acknowledge the pending status in 1 sentence.',
+					'Be warm, concise, no JSON.'
+				].join('\n');
+				const aiComment = await ai.answerWithPrompt(prompt).catch(() => '');
+				res.json({ ok: true, aiComment });
+				return;
+			}
+			res.json({ ok: true });
+		} catch (err: any) {
+			res.status(500).json({ message: err?.message ?? 'Failed to save decision' });
+		}
+	});
+
+	// Finalize screening — lock decisions, generate summary, save to DB
+	app.post('/screening/finalize', requireAuth, async (req: Request, res: Response) => {
+		try {
+			const { jobId } = req.body || {};
+			if (!jobId) { res.status(400).json({ message: 'jobId is required' }); return; }
+			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user!.id }).lean();
+			if (recruiterProfile) {
+				const job = await JobModel.findOne({ _id: jobId, recruiter: recruiterProfile._id }).lean();
+				if (!job) { res.status(403).json({ message: 'Access denied.' }); return; }
+			}
+			const snapshot = await ScreeningSnapshotModel.findOne({ jobId }).lean();
+			if (!snapshot) { res.status(404).json({ message: 'No screening found.' }); return; }
+
+			const results = (snapshot.results as any[]) || [];
+			const decisions = (snapshot.decisions as Record<string, any>) || {};
+			const approved = results.filter((r: any) => decisions[r.applicationId]?.decision === 'approved');
+			const rejected = results.filter((r: any) => decisions[r.applicationId]?.decision === 'rejected');
+			const pending = results.filter((r: any) => !decisions[r.applicationId] || decisions[r.applicationId]?.decision === 'pending');
+
+			let finalSummary = `Screening finalized. ${approved.length} approved, ${rejected.length} rejected, ${pending.length} pending.`;
+
+			if (process.env.GEMINI_API_KEY) {
+				const ai = new GeminiAiService(process.env.GEMINI_API_KEY, { model: 'gemini-2.5-flash' });
+				const prompt = [
+					'You are Intore AI. Generate a concise final screening report in plain English (no JSON).',
+					'Use markdown: **bold** for names, bullet points for lists.',
+					`Total candidates screened: ${results.length}`,
+					`Approved (${approved.length}): ${approved.map((r: any) => `${r.name} (${r.score}%)`).join(', ') || 'none'}`,
+					`Rejected (${rejected.length}): ${rejected.map((r: any) => r.name).join(', ') || 'none'}`,
+					`Pending (${pending.length}): ${pending.map((r: any) => r.name).join(', ') || 'none'}`,
+					'Write 3-4 sentences: who was approved and why they stand out, key gaps in rejected candidates, and a next-step recommendation.',
+				].join('\n');
+				finalSummary = await ai.answerWithPrompt(prompt).catch(() => finalSummary);
+			}
+
+			await ScreeningSnapshotModel.findOneAndUpdate(
+				{ jobId },
+				{ $set: { finalized: true, finalizedAt: new Date(), finalizedBy: req.user!.id, finalSummary } }
+			);
+			res.json({ ok: true, finalSummary, approved: approved.length, rejected: rejected.length, pending: pending.length });
+		} catch (err: any) {
+			res.status(500).json({ message: err?.message ?? 'Failed to finalize' });
+		}
+	});
+
+	// Get snapshot with decisions (for returning users)
+	app.get('/screening/snapshot/:jobId', requireAuth, async (req: Request, res: Response) => {
+		try {
+			const { jobId } = req.params;
+			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user!.id }).lean();
+			if (recruiterProfile) {
+				const job = await JobModel.findOne({ _id: jobId, recruiter: recruiterProfile._id }).lean();
+				if (!job) { res.status(403).json({ message: 'Access denied.' }); return; }
+			}
+			const snapshot = await ScreeningSnapshotModel.findOne({ jobId }).lean();
+			res.json(snapshot || null);
+		} catch (err: any) {
+			res.status(500).json({ message: err?.message ?? 'Failed to load snapshot' });
 		}
 	});
 

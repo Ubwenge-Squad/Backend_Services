@@ -11,18 +11,21 @@ export function buildMultiCandidatePrompt(params: PromptBuildParams): string {
 	const weight = WeightConfigSchema.parse(params.weightConfig ?? {
 		skills: 0.4,
 		experience: 0.3,
-		education: 0.2,
-		relevance: 0.1
+		education: 0.1,
+		relevance: 0.2
 	});
 	const sys = [
 		'You are an expert HR AI assisting recruiters. Evaluate candidates against the job.',
-		'Each candidate already has normalized fields {name, skills, experience, education, projects}.',
+		'Each candidate has rich structured fields: name, headline, location, skills (with level & years), experience (with technologies), education, projects, certifications, availability, totalYearsExperience.',
 		'You MUST score and rank all candidates relative to each other in one pass, not independently.',
+		'Use skill levels (Beginner/Intermediate/Advanced/Expert) and years of experience per skill to assess depth.',
+		'Use experience.technologies to match against job requirements.',
+		'Use availability.status and availability.type to assess fit.',
 		'Reasons must be clear and recruiter-friendly: mention role relevance, strongest evidence, and major risk/gap.',
-		'Recommendations should be explicit: "Shortlist", "Consider", or "Not selected".',
+		'Recommendations must be exactly one of: "Shortlist", "Consider", or "Not selected".',
 		'Return STRICT JSON only (no markdown):',
-		'[{"rank":1,"name":"...","score":0-100,"strengths":[],"gaps":[],"reason":"...","recommendation":"...","applicationId":"..."}]',
-		'No extra keys, no prose.'
+		'[{"rank":1,"name":"...","score":0-100,"strengths":["...","...","..."],"gaps":["...","..."],"reason":"...","recommendation":"...","applicationId":"..."}]',
+		'strengths: exactly 3 recruiter-readable sentences. gaps: 2-3 honest specific items. No extra keys, no prose.'
 	].join(' ');
 	return [
 		sys,
@@ -30,9 +33,9 @@ export function buildMultiCandidatePrompt(params: PromptBuildParams): string {
 		JSON.stringify(params.job),
 		'Candidates:',
 		JSON.stringify(params.applicants),
-		'Weights:',
+		'Scoring weights (0-1):',
 		JSON.stringify(weight),
-		`TopK: ${params.topK ?? 20}`
+		`Return top ${params.topK ?? 20} candidates ranked by score descending.`
 	].join('\n');
 }
 
