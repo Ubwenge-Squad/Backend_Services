@@ -15,32 +15,42 @@ export async function getJobWithApplicants(jobId: string) {
 	const resumes = await ResumeModel.find({ applicant: { $in: applicantIds }, isPrimary: true }).lean();
 	const resumeByApplicant: Record<string, any> = {};
 	for (const r of resumes) resumeByApplicant[String(r.applicant)] = r;
+
 	const enriched = applications.map((a) => {
 		const ap = applicants.find((p) => String(p._id) === String(a.applicant));
 		const u = users.find((x) => String(x._id) === String(ap?.user));
 		const r = resumeByApplicant[String(a.applicant)];
+
 		const normalized = normalizeApplicantFromProfile({
+			firstName: ap?.firstName || u?.fullName?.split(' ')[0],
+			lastName: ap?.lastName || u?.fullName?.split(' ').slice(1).join(' '),
 			fullName: u?.fullName,
+			headline: ap?.headline,
+			location: ap?.location,
 			skills: ap?.skills,
-			yearsOfExperience: ap?.yearsOfExperience,
-			education: ap?.education,
-			workExperience: ap?.workExperience,
+			experience: ap?.experience as any,
+			education: ap?.education as any,
+			projects: ap?.projects as any,
+			certifications: ap?.certifications as any,
+			availability: ap?.availability as any,
 			parsedResumeText: r?.parsedText ?? null
 		});
+
 		return {
 			applicationId: String(a._id),
 			applicantId: String(a.applicant),
 			normalized,
+			// Flat fields for backward compat
 			name: normalized.name,
 			skills: normalized.skills,
-			yearsOfExperience: normalized.experience,
+			yearsOfExperience: normalized.totalYearsExperience,
 			education: normalized.education,
 			projects: normalized.projects,
 			resumeText: r?.parsedText ?? null,
 			links: {
-				linkedinUrl: ap?.linkedinUrl ?? null,
-				githubUrl: ap?.githubUrl ?? null,
-				portfolioUrl: ap?.portfolioUrl ?? null
+				linkedinUrl: ap?.socialLinks?.linkedin ?? null,
+				githubUrl: ap?.socialLinks?.github ?? null,
+				portfolioUrl: ap?.socialLinks?.portfolio ?? null
 			}
 		};
 	});

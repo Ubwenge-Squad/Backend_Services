@@ -15,6 +15,8 @@ import { requireAuth, requireRole } from '../middlewares/auth';
 import { getJobWithApplicants } from '../ai/retrievers/mongoRetriever';
 import { buildRecruiterQaPrompt } from '../ai/prompts';
 import { GeminiAiService } from '../ai/gemini';
+import { RecruiterProfileModel } from '../models/RecruiterProfile.model';
+import { JobModel } from '../models/Job.model';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -114,6 +116,15 @@ export function registerRoutes(app: Express): void {
 			res.status(400).json({ message: 'jobId is required' });
 			return;
 		}
+		// Verify the job belongs to this recruiter
+		const recruiterProfile2 = await RecruiterProfileModel.findOne({ user: req.user!.id }).lean();
+		if (recruiterProfile2) {
+			const job = await JobModel.findOne({ _id: jobId, recruiter: recruiterProfile2._id }).lean();
+			if (!job) {
+				res.status(403).json({ message: 'Access denied.' });
+				return;
+			}
+		}
 		const snapshot = await ScreeningSnapshotModel.findOne({ jobId }).lean();
 		if (!snapshot) {
 			res.json([]);
@@ -148,15 +159,25 @@ export function registerRoutes(app: Express): void {
 				return;
 			}
 			const ai = new GeminiAiService(process.env.GEMINI_API_KEY, { model: 'gemini-2.5-flash' });
+			const recruiterId = req.user!.id;
+
+			// Resolve the recruiter's own job IDs for scoping
+			const recruiterProfile = await RecruiterProfileModel.findOne({ user: recruiterId }).lean();
+			const myJobIds = recruiterProfile
+				? (await JobModel.find({ recruiter: recruiterProfile._id }).select('_id').lean()).map((j: any) => String(j._id))
+				: [];
 
 			// General context: no specific job or jobId === 'general'
 			if (!jobId || jobId === 'general') {
-				// Try to find the most recent snapshot for this recruiter's jobs
-				const latestSnapshot = await ScreeningSnapshotModel.findOne().sort({ updatedAt: -1 }).lean();
+				// Only look at snapshots for THIS recruiter's jobs
+				const latestSnapshot = myJobIds.length
+					? await ScreeningSnapshotModel.findOne({ jobId: { $in: myJobIds } }).sort({ updatedAt: -1 }).lean()
+					: null;
+
 				if (!latestSnapshot) {
 					const generalPrompt = [
-						'You are Intore AI, an expert recruiter assistant for Rwanda-based hiring.',
-						'No screening data is available yet. Answer the recruiter\'s question helpfully and suggest next steps.',
+						'You are Intore AI, an expert recruiter assistant for Rwanda-based recruiting.',
+						'No screening data is available yet for this recruiter. Answer helpfully and suggest next steps.',
 						`Question: ${String(question)}`
 					].join('\n');
 					const answer = await ai.answerWithPrompt(generalPrompt);
@@ -175,7 +196,12 @@ export function registerRoutes(app: Express): void {
 				return;
 			}
 
-			// Job-specific context
+			// Job-specific context — verify the job belongs to this recruiter
+			if (!myJobIds.includes(String(jobId))) {
+				res.status(403).json({ message: 'You do not have access to this job.' });
+				return;
+			}
+
 			const snapshot = await ScreeningSnapshotModel.findOne({ jobId }).lean();
 			if (!snapshot) {
 				res.status(400).json({ message: 'No screening results found for this job yet. Run screening first.' });
