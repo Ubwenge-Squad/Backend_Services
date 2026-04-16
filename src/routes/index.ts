@@ -17,6 +17,8 @@ import { buildRecruiterQaPrompt } from '../ai/prompts';
 import { GeminiAiService } from '../ai/gemini';
 import { RecruiterProfileModel } from '../models/RecruiterProfile.model';
 import { JobModel } from '../models/Job.model';
+import { DecisionSessionModel } from '../models/DecisionSession.model';
+import sessionRoutes from './sessions';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -337,6 +339,14 @@ export function registerRoutes(app: Express): void {
 		} catch (err: any) {
 			res.status(500).json({ message: err?.message ?? 'Failed to load snapshot' });
 		}
+	});
+
+	// Decision Sessions (AI conversation)
+	app.use('/api/sessions', sessionRoutes);
+	app.get('/api/jobs/:jobId/session', requireAuth, async (req: Request, res: Response) => {
+		const session = await DecisionSessionModel.findOne({ jobId: req.params.jobId, recruiterId: req.user!.id }).sort({ startedAt: -1 }).lean();
+		if (!session) { res.status(404).json({ message: 'No session' }); return; }
+		res.json(session);
 	});
 
 	// Bias
