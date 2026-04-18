@@ -40,6 +40,13 @@ export const RankedOutputItemSchema = z.object({
 	rank: z.number().int().positive(),
 	name: z.string().min(1),
 	score: z.number().min(0).max(100),
+	subscores: z.object({
+		skills: z.number().min(0).max(100).default(0),
+		experience: z.number().min(0).max(100).default(0),
+		education: z.number().min(0).max(100).default(0),
+		projects: z.number().min(0).max(100).default(0),
+		availability: z.number().min(0).max(100).default(0),
+	}).optional(),
 	strengths: z.array(z.string()),
 	gaps: z.array(z.string()),
 	reason: z.string().min(1),
