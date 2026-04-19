@@ -9,7 +9,7 @@ All protected endpoints require `Authorization: Bearer <token>`.
 ## Authentication
 
 ### POST /auth/register
-Register a new recruiter account.
+Register a new account (recruiter or applicant).
 
 **Body**
 ```json
@@ -26,40 +26,74 @@ Register a new recruiter account.
 **Response 201**
 ```json
 {
-  "message": "User created. Verification required.",
-  "verificationRequired": true,
+  "message": "Account created. Please verify your email with the OTP sent.",
   "email": "recruiter@example.com",
-  "devCode": "123456"   // only in non-production
+  "requiresVerification": true,
+  "devCode": "123456"   // only in development mode
 }
 ```
 
 ---
 
-### POST /auth/verify
-Verify email with the 6-digit code.
+### POST /auth/verify-registration
+Verify email with the 6-digit OTP code received after registration.
 
 **Body**
 ```json
-{ "email": "recruiter@example.com", "code": "123456" }
+{ 
+  "email": "recruiter@example.com", 
+  "code": "123456" 
+}
 ```
 
 **Response 200**
 ```json
 {
-  "verified": true,
+  "message": "Email verified successfully",
   "token": "<jwt>",
-  "user": { "id": "...", "email": "...", "role": "recruiter", "fullName": "..." }
+  "user": { 
+    "id": "...", 
+    "email": "...", 
+    "role": "recruiter", 
+    "fullName": "..." 
+  }
 }
 ```
 
 ---
 
 ### POST /auth/login
-Login with email and password.
+Login with email and password. Sends OTP to email for verification.
 
 **Body**
 ```json
-{ "email": "recruiter@example.com", "password": "SecurePass123!" }
+{ 
+  "email": "recruiter@example.com", 
+  "password": "SecurePass123!" 
+}
+```
+
+**Response 200**
+```json
+{
+  "message": "OTP sent to your email. Please verify to complete login.",
+  "email": "recruiter@example.com",
+  "requiresVerification": true,
+  "devCode": "654321"   // only in development mode
+}
+```
+
+---
+
+### POST /auth/verify-login
+Verify login with the 6-digit OTP code received via email.
+
+**Body**
+```json
+{ 
+  "email": "recruiter@example.com", 
+  "code": "654321" 
+}
 ```
 
 **Response 200**
@@ -67,18 +101,34 @@ Login with email and password.
 {
   "message": "Login successful",
   "token": "<jwt>",
-  "user": { "id": "...", "email": "...", "role": "recruiter", "fullName": "..." }
+  "user": { 
+    "id": "...", 
+    "email": "...", 
+    "role": "recruiter", 
+    "fullName": "..." 
+  }
 }
 ```
 
 ---
 
-### POST /auth/resend-code
-Resend verification code.
+### POST /auth/resend-otp
+Resend OTP code for registration, login, or password reset.
 
 **Body**
 ```json
-{ "email": "recruiter@example.com", "purpose": "register" }
+{ 
+  "email": "recruiter@example.com", 
+  "purpose": "login_otp"  // or "register" or "reset_password"
+}
+```
+
+**Response 200**
+```json
+{
+  "message": "OTP resent successfully",
+  "devCode": "789012"   // only in development mode
+}
 ```
 
 ---
