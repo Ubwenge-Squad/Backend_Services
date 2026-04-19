@@ -91,9 +91,9 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
 
 async function bootstrap() {
 	await connectMongo();
-	app.listen(PORT, () => {
-		console.log(`API listening on http://localhost:${PORT}`);
-		console.log(`Swagger UI at http://localhost:${PORT}/docs`);
+	app.listen(PORT,'0.0.0.0',() => {
+		console.log(`API listening on http://0.0.0.0:${PORT}`);
+		console.log(`Swagger UI at http://0.0.0.0:${PORT}/docs`);
 	});
 }
 
