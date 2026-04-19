@@ -2,7 +2,7 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IUser extends Document {
   email: string;    
-  passwordHash: string;
+  passwordHash?: string; // Optional for OAuth users
   role: 'applicant' | 'recruiter' | 'admin';
   fullName: string;
   avatarUrl?: string;
@@ -12,11 +12,13 @@ export interface IUser extends Document {
   lastLoginAt?: Date;
   deletedAt?: Date;
   scheduledPurgeAt?: Date;
+  googleId?: string; // Google OAuth ID
+  authProvider?: 'local' | 'google'; // Authentication provider
 }
 
 const UserSchema = new Schema<IUser>({
   email: { type: String, required: true, unique: true, index: true },
-  passwordHash: { type: String, required: true },
+  passwordHash: { type: String }, // Not required for OAuth users
   role: { type: String, enum: ['applicant', 'recruiter', 'admin'], default: 'applicant', index: true },
   fullName: { type: String, required: true },
   avatarUrl: { type: String },
@@ -25,7 +27,9 @@ const UserSchema = new Schema<IUser>({
   emailVerified: { type: Boolean, default: false },
   lastLoginAt: { type: Date },
   deletedAt: { type: Date, index: true },
-  scheduledPurgeAt: { type: Date }
+  scheduledPurgeAt: { type: Date },
+  googleId: { type: String, unique: true, sparse: true, index: true }, // Google OAuth ID
+  authProvider: { type: String, enum: ['local', 'google'], default: 'local' } // Auth provider
 }, {
   timestamps: true
 });

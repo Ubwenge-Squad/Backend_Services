@@ -2,11 +2,14 @@ import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import { OAuth2Client } from "google-auth-library";
 import { UserModel } from "../models/User.model";
 import { AuthUser } from "../middlewares/auth";
 import { RecruiterProfileModel } from "../models/RecruiterProfile.model";
 import { issueVerificationCode, consumeVerificationCode } from "../services/verification";
 dotenv.config();
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 export const AuthController = {
     async register(req: Request, res: Response) {
@@ -216,6 +219,77 @@ export const AuthController = {
         } catch (error) {
             console.log("Resend OTP error", error);
             return res.status(500).json({ message: "Internal server error while resending OTP" });
+        }
+    },
+
+    async googleSignIn(req: Request, res: Response) {
+        try {
+            const jwtSecret = process.env.JWT_SECRET!;
+            const { credential } = req.body;
+
+            if (!credential) {
+                return res.status(400).json({ message: "Google credential is required" });
+            }
+
+            // Verify the Google token
+            const ticket = await googleClient.verifyIdToken({
+                idToken: credential,
+                audience: process.env.GOOGLE_CLIENT_ID,
+            });
+
+            const payload = ticket.getPayload();
+            if (!payload || !payload.email) {
+                return res.status(400).json({ message: "Invalid Google token" });
+            }
+
+            const { email, name, picture, sub: googleId, email_verified } = payload;
+
+            // Check if user exists
+            let user = await UserModel.findOne({ $or: [{ email }, { googleId }] });
+
+            if (user) {
+                // Existing user - just log them in
+                if (!user.googleId) {
+                    // Link Google account to existing user
+                    user.googleId = googleId;
+                    user.authProvider = 'google';
+                    user.emailVerified = email_verified || true;
+                    if (picture && !user.avatarUrl) {
+                        user.avatarUrl = picture;
+                    }
+                    await user.save();
+                }
+
+                user.lastLoginAt = new Date();
+                await user.save();
+
+                const authPayload: AuthUser = { id: user._id.toString(), email: user.email, role: user.role };
+                const token = jwt.sign(authPayload, jwtSecret, { expiresIn: "7d" });
+
+                return res.status(200).json({
+                    message: "Login successful",
+                    token,
+                    user: {
+                        id: user._id.toString(),
+                        email: user.email,
+                        role: user.role,
+                        fullName: user.fullName,
+                        avatarUrl: user.avatarUrl
+                    }
+                });
+            } else {
+                // New user - account doesn't exist
+                return res.status(404).json({ 
+                    message: "No account found with this email. Please register first.",
+                    requiresRegistration: true,
+                    googleEmail: email,
+                    googleName: name,
+                    googlePicture: picture
+                });
+            }
+        } catch (error) {
+            console.log("Google Sign-In error", error);
+            return res.status(500).json({ message: "Internal server error during Google Sign-In" });
         }
     }
 }
