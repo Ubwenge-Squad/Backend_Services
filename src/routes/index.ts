@@ -40,6 +40,7 @@ export function registerRoutes(app: Express): void {
 	app.post('/jobs', requireAuth, requireRole(['recruiter', 'admin']), JobsController.create);
 	app.get('/jobs/:jobId', requireAuth, requireRole(['recruiter', 'admin']), JobsController.getById);
 	app.patch('/jobs/:jobId', requireAuth, requireRole(['recruiter', 'admin']), JobsController.update);
+	app.delete('/jobs/:jobId', requireAuth, requireRole(['recruiter', 'admin']), JobsController.delete);
 	app.post('/jobs/:jobId/activate', requireAuth, requireRole(['recruiter', 'admin']), JobsController.activate);
 	app.post('/jobs/:jobId/close', requireAuth, requireRole(['recruiter', 'admin']), JobsController.close);
 
