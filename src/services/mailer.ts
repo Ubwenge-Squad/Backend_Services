@@ -1,28 +1,51 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
-function getResendClient(): Resend {
-	const apiKey = process.env.RESEND_API_KEY;
-	if (!apiKey) throw new Error('RESEND_API_KEY is required for email sending');
-	return new Resend(apiKey);
+function getSmtpTransporter() {
+	const host = process.env.SMTP_HOST;
+	const port = process.env.SMTP_PORT;
+	const user = process.env.SMTP_USER;
+	const pass = process.env.SMTP_PASS;
+
+	if (!host || !port || !user || !pass) {
+		throw new Error('SMTP configuration incomplete. Required: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS');
+	}
+
+	return nodemailer.createTransport({
+		host,
+		port: parseInt(port),
+		secure: parseInt(port) === 465, // true for 465, false for other ports
+		auth: {
+			user,
+			pass,
+		},
+	});
 }
 
 export async function sendMail(params: { to: string; subject: string; text: string; html?: string }) {
-	// If no Resend key, log and skip (dev mode)
-	if (!process.env.RESEND_API_KEY) {
-		console.log(`[sendMail] No RESEND_API_KEY — skipping email to ${params.to}: ${params.subject}`);
+	// Check if SMTP is configured
+	if (!process.env.SMTP_HOST) {
+		console.log(`[sendMail] No SMTP configuration — skipping email to ${params.to}: ${params.subject}`);
 		return;
 	}
-	const resend = getResendClient();
-	const fromName = process.env.MAIL_FROM_NAME || 'Intore';
-	const fromEmail = process.env.MAIL_FROM_EMAIL || 'onboarding@resend.dev';
-	const { error } = await resend.emails.send({
-		from: `${fromName} <${fromEmail}>`,
-		to: params.to,
-		subject: params.subject,
-		text: params.text,
-		html: params.html,
-	});
-	if (error) throw new Error(error.message);
+
+	try {
+		const transporter = getSmtpTransporter();
+		const fromName = process.env.MAIL_FROM_NAME || 'Intore';
+		const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+
+		await transporter.sendMail({
+			from: `${fromName} <${fromEmail}>`,
+			to: params.to,
+			subject: params.subject,
+			text: params.text,
+			html: params.html,
+		});
+
+		console.log(`[sendMail] Email sent via SMTP to ${params.to}`);
+	} catch (error: any) {
+		console.error(`[sendMail] SMTP error:`, error);
+		throw new Error(`Failed to send email via SMTP: ${error.message}`);
+	}
 }
 
 export function buildVerificationEmail(args: { code: string; purpose: 'register' | 'reset_password' | 'login_otp'; ttlMinutes: number }) {

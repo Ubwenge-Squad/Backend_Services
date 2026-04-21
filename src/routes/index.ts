@@ -25,7 +25,11 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 export function registerRoutes(app: Express): void {
 	// Auth
 	app.post('/auth/register', AuthController.register);
+	app.post('/auth/verify-registration', AuthController.verifyRegistration);
 	app.post('/auth/login', AuthController.login);
+	app.post('/auth/verify-login', AuthController.verifyLogin);
+	app.post('/auth/resend-otp', AuthController.resendOtp);
+	app.post('/auth/google', AuthController.googleSignIn);
 	app.get('/auth/me', requireAuth, (req: Request, res: Response) => {
 		res.json({ user: req.user });
 	});

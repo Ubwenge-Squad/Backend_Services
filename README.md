@@ -29,13 +29,50 @@ npm start             # run compiled output
 | `CLOUDINARY_CLOUD_NAME` | Yes | Cloudinary cloud name |
 | `CLOUDINARY_API_KEY` | Yes | Cloudinary API key |
 | `CLOUDINARY_API_SECRET` | Yes | Cloudinary API secret |
-| `SMTP_HOST` | No | SMTP host (default: `smtp.gmail.com`) |
-| `SMTP_PORT` | No | SMTP port (default: `465`) |
-| `SMTP_SECURE` | No | Use TLS (`true`/`false`) |
-| `SMTP_USER` | No | SMTP username / Gmail address |
-| `SMTP_PASS` | No | Gmail App Password |
-| `MAIL_FROM_NAME` | No | Sender display name |
-| `MAIL_FROM_EMAIL` | No | Sender email address |
+| **Email Configuration (Gmail SMTP)** | | |
+| `SMTP_HOST` | Yes | SMTP host (use `smtp.gmail.com`) |
+| `SMTP_PORT` | Yes | SMTP port (587 for TLS, 465 for SSL) |
+| `SMTP_USER` | Yes | Gmail address |
+| `SMTP_PASS` | Yes | Gmail App Password (16 characters) |
+| `SMTP_FROM_EMAIL` | Yes | Sender email (same as SMTP_USER) |
+| `MAIL_FROM_NAME` | No | Sender display name (default: `Intore`) |
+
+---
+
+## Email & OTP Verification
+
+The platform supports **OTP (One-Time Password) verification** for both registration and login flows using Gmail SMTP.
+
+### Features
+- 6-digit OTP codes sent via email
+- 15-minute expiration
+- One-time use per code
+- Resend functionality
+- Development mode shows codes in API response
+
+### Gmail SMTP Setup
+
+**Quick Setup:**
+1. Enable 2-factor authentication on your Google account
+2. Generate an App Password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+3. Add credentials to `.env`:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-16-char-app-password
+SMTP_FROM_EMAIL=your-email@gmail.com
+MAIL_FROM_NAME=Intore
+```
+
+### Authentication Flow
+
+1. **Registration**: `POST /auth/register` → OTP sent → `POST /auth/verify-registration` → JWT token
+2. **Login**: `POST /auth/login` → OTP sent → `POST /auth/verify-login` → JWT token
+3. **Resend**: `POST /auth/resend-otp` if code expires
+
+See [`OTP_SETUP.md`](./OTP_SETUP.md) for detailed configuration and usage.
 
 ---
 
@@ -113,7 +150,8 @@ See [`API.md`](./API.md) for the full reference.
 - **CORS** — configurable via `CORS_ORIGIN`
 - **JWT** — HS256, 7-day expiry
 - **bcrypt** — password hashing (10 salt rounds)
-- **Email verification** — required before first login
+- **OTP verification** — 6-digit codes for registration and login
+- **Email verification** — required before account activation
 
 ---
 

@@ -24,8 +24,8 @@ export function buildMultiCandidatePrompt(params: PromptBuildParams): string {
 		'Reasons must be clear and recruiter-friendly: mention role relevance, strongest evidence, and major risk/gap.',
 		'Recommendations must be exactly one of: "Shortlist", "Consider", or "Not selected".',
 		'Return STRICT JSON only (no markdown):',
-		'[{"rank":1,"name":"...","score":0-100,"strengths":["...","...","..."],"gaps":["...","..."],"reason":"...","recommendation":"...","applicationId":"..."}]',
-		'strengths: exactly 3 recruiter-readable sentences. gaps: 2-3 honest specific items. No extra keys, no prose.'
+		'[{"rank":1,"name":"...","score":0-100,"subscores":{"skills":0-100,"experience":0-100,"education":0-100,"projects":0-100,"availability":0-100},"strengths":["...","...","..."],"gaps":["...","..."],"reason":"...","recommendation":"...","applicationId":"..."}]',
+		'subscores: each dimension scored 0-100 independently before weighting. strengths: exactly 3 recruiter-readable sentences. gaps: 2-3 honest specific items. No extra keys, no prose.'
 	].join(' ');
 	return [
 		sys,
