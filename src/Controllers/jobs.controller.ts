@@ -128,5 +128,24 @@ export const JobsController = {
 			{ new: true, runValidators: true }
 		).lean();
 		return res.json(updated);
+	},
+
+	async delete(req: Request, res: Response): Promise<Response> {
+		const jobId = String(req.params.jobId ?? '');
+		if (!mongoose.Types.ObjectId.isValid(jobId)) {
+			return res.status(400).json({ message: 'Invalid jobId' });
+		}
+		const existing = await JobModel.findById(jobId).lean();
+		if (!existing) {
+			return res.status(404).json({ message: 'Job not found' });
+		}
+		if (req.user!.role !== 'admin') {
+			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user!.id }).lean();
+			if (!recruiterProfile || String(existing.recruiter) !== String(recruiterProfile._id)) {
+				return res.status(403).json({ message: 'Forbidden: you do not own this job' });
+			}
+		}
+		await JobModel.findByIdAndDelete(jobId);
+		return res.status(204).send();
 	}
 };
