@@ -35,13 +35,12 @@ const UserSchema = new Schema<IUser>({
 });
 
 // Middleware for GDPR scheduled purge calculation
-UserSchema.pre('save', function (next) {
+UserSchema.pre('save', function () {
   if (this.isModified('deletedAt') && this.deletedAt && !this.scheduledPurgeAt) {
     const purgeDate = new Date(this.deletedAt.getTime());
     purgeDate.setDate(purgeDate.getDate() + 90);
     this.scheduledPurgeAt = purgeDate;
   }
-
 });
 
 export const UserModel = mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
