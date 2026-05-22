@@ -1,13 +1,13 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
 import { OAuth2Client } from "google-auth-library";
 import { UserModel } from "../models/User.model";
 import { AuthUser } from "../middlewares/auth";
 import { RecruiterProfileModel } from "../models/RecruiterProfile.model";
 import { issueVerificationCode, consumeVerificationCode } from "../services/verification";
-dotenv.config();
+import { sendSuccess, sendError } from "../utils/response";
+import { logger } from "../utils/logger";
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -18,17 +18,17 @@ export const AuthController = {
             const name = fullName || fullname;
             const requestedRole = role || "recruiter";
             if (!email || !password || !name || !phoneNumber) {
-                return res.status(400).json({ message: "email, password, fullName, phoneNumber are required" });
+                return sendError(res, 400, "email, password, fullName, phoneNumber are required", "BAD_REQUEST");
             }
             if (!["applicant", "recruiter", "admin"].includes(requestedRole)) {
-                return res.status(400).json({ message: "Invalid role" });
+                return sendError(res, 400, "Invalid role", "BAD_REQUEST");
             }
             if (requestedRole === "recruiter" && !companyName) {
-                return res.status(400).json({ message: "companyName is required for recruiter accounts" });
+                return sendError(res, 400, "companyName is required for recruiter accounts", "BAD_REQUEST");
             }
             const existingUser = await UserModel.findOne({ email });
             if (existingUser) {
-                return res.status(409).json({ message: "User already exists" });
+                return sendError(res, 409, "User already exists", "CONFLICT");
             }
             const salt = await bcrypt.genSalt(10);
             const passwordHash = await bcrypt.hash(password, salt);
@@ -40,7 +40,7 @@ export const AuthController = {
                 phoneNumber,
                 role: requestedRole,
                 isActive: true,
-                emailVerified: false, // require email verification
+                emailVerified: false,
                 lastLoginAt: new Date()
             });
 
@@ -51,21 +51,18 @@ export const AuthController = {
                 });
             }
 
-            // Send OTP for email verification
             const code = await issueVerificationCode(email, 'register', 15);
-            
-            // In development, return the code for testing
             const devCode = process.env.NODE_ENV !== 'production' ? code : undefined;
 
-            return res.status(201).json({
+            return sendSuccess(res, {
                 message: "Account created. Please verify your email with the OTP sent.",
                 email,
                 requiresVerification: true,
-                ...(devCode && { devCode }) // Only in dev mode
-            });
+                ...(devCode && { devCode })
+            }, 201);
         } catch (error) {
-            console.log("Registration error", error);
-            return res.status(500).json({ message: "Internal server error during registration" });
+            logger.error("Registration error", error);
+            return sendError(res, 500, "Internal server error during registration");
         }
     },
 
@@ -73,19 +70,19 @@ export const AuthController = {
         try {
             const jwtSecret = process.env.JWT_SECRET!;
             const { email, code } = req.body;
-            
+
             if (!email || !code) {
-                return res.status(400).json({ message: "email and code are required" });
+                return sendError(res, 400, "email and code are required", "BAD_REQUEST");
             }
 
             const isValid = await consumeVerificationCode(email, 'register', code);
             if (!isValid) {
-                return res.status(400).json({ message: "Invalid or expired verification code" });
+                return sendError(res, 400, "Invalid or expired verification code", "BAD_REQUEST");
             }
 
             const user = await UserModel.findOne({ email });
             if (!user) {
-                return res.status(404).json({ message: "User not found" });
+                return sendError(res, 404, "User not found", "NOT_FOUND");
             }
 
             user.emailVerified = true;
@@ -94,7 +91,7 @@ export const AuthController = {
             const payload: AuthUser = { id: user._id.toString(), email: user.email, role: user.role };
             const token = jwt.sign(payload, jwtSecret, { expiresIn: "7d" });
 
-            return res.status(200).json({
+            return sendSuccess(res, {
                 message: "Email verified successfully",
                 token,
                 user: {
@@ -105,8 +102,8 @@ export const AuthController = {
                 }
             });
         } catch (error) {
-            console.log("Verification error", error);
-            return res.status(500).json({ message: "Internal server error during verification" });
+            logger.error("Verification error", error);
+            return sendError(res, 500, "Internal server error during verification");
         }
     },
 
@@ -114,38 +111,35 @@ export const AuthController = {
         try {
             const { email, password } = req.body;
             if (!email || !password) {
-                return res.status(400).json({ message: "All fields are required" });
+                return sendError(res, 400, "All fields are required", "BAD_REQUEST");
             }
             const user = await UserModel.findOne({ email });
             if (!user) {
-                return res.status(401).json({ message: "Invalid credentials" });
+                return sendError(res, 401, "Invalid credentials", "UNAUTHORIZED");
             }
             if (user.deletedAt) {
-                return res.status(403).json({ message: "Account has been deleted" });
+                return sendError(res, 403, "Account has been deleted", "FORBIDDEN");
             }
             if (!user.isActive) {
-                return res.status(403).json({ message: "Account is deactivated" });
+                return sendError(res, 403, "Account is deactivated", "FORBIDDEN");
             }
             const isPasswordMatch = await bcrypt.compare(password, user.passwordHash);
             if (!isPasswordMatch) {
-                return res.status(401).json({ message: "Invalid credentials" });
+                return sendError(res, 401, "Invalid credentials", "UNAUTHORIZED");
             }
 
-            // Send OTP for login verification
             const code = await issueVerificationCode(email, 'login_otp', 15);
-            
-            // In development, return the code for testing
             const devCode = process.env.NODE_ENV !== 'production' ? code : undefined;
 
-            return res.status(200).json({
+            return sendSuccess(res, {
                 message: "OTP sent to your email. Please verify to complete login.",
                 email,
                 requiresVerification: true,
-                ...(devCode && { devCode }) // Only in dev mode
+                ...(devCode && { devCode })
             });
         } catch (error) {
-            console.log("Login error", error);
-            return res.status(500).json({ message: "Internal server error during login" });
+            logger.error("Login error", error);
+            return sendError(res, 500, "Internal server error during login");
         }
     },
 
@@ -153,19 +147,19 @@ export const AuthController = {
         try {
             const jwtSecret = process.env.JWT_SECRET!;
             const { email, code } = req.body;
-            
+
             if (!email || !code) {
-                return res.status(400).json({ message: "email and code are required" });
+                return sendError(res, 400, "email and code are required", "BAD_REQUEST");
             }
 
             const isValid = await consumeVerificationCode(email, 'login_otp', code);
             if (!isValid) {
-                return res.status(400).json({ message: "Invalid or expired verification code" });
+                return sendError(res, 400, "Invalid or expired verification code", "BAD_REQUEST");
             }
 
             const user = await UserModel.findOne({ email });
             if (!user) {
-                return res.status(404).json({ message: "User not found" });
+                return sendError(res, 404, "User not found", "NOT_FOUND");
             }
 
             user.lastLoginAt = new Date();
@@ -174,7 +168,7 @@ export const AuthController = {
             const payload: AuthUser = { id: user._id.toString(), email: user.email, role: user.role };
             const token = jwt.sign(payload, jwtSecret, { expiresIn: "7d" });
 
-            return res.status(200).json({
+            return sendSuccess(res, {
                 message: "Login successful",
                 token,
                 user: {
@@ -185,40 +179,38 @@ export const AuthController = {
                 }
             });
         } catch (error) {
-            console.log("Login verification error", error);
-            return res.status(500).json({ message: "Internal server error during login verification" });
+            logger.error("Login verification error", error);
+            return sendError(res, 500, "Internal server error during login verification");
         }
     },
 
     async resendOtp(req: Request, res: Response) {
         try {
             const { email, purpose } = req.body;
-            
+
             if (!email || !purpose) {
-                return res.status(400).json({ message: "email and purpose are required" });
+                return sendError(res, 400, "email and purpose are required", "BAD_REQUEST");
             }
 
             if (!['register', 'login_otp', 'reset_password'].includes(purpose)) {
-                return res.status(400).json({ message: "Invalid purpose" });
+                return sendError(res, 400, "Invalid purpose", "BAD_REQUEST");
             }
 
             const user = await UserModel.findOne({ email });
             if (!user) {
-                return res.status(404).json({ message: "User not found" });
+                return sendError(res, 404, "User not found", "NOT_FOUND");
             }
 
             const code = await issueVerificationCode(email, purpose as 'register' | 'login_otp' | 'reset_password', 15);
-            
-            // In development, return the code for testing
             const devCode = process.env.NODE_ENV !== 'production' ? code : undefined;
 
-            return res.status(200).json({
+            return sendSuccess(res, {
                 message: "OTP resent successfully",
-                ...(devCode && { devCode }) // Only in dev mode
+                ...(devCode && { devCode })
             });
         } catch (error) {
-            console.log("Resend OTP error", error);
-            return res.status(500).json({ message: "Internal server error while resending OTP" });
+            logger.error("Resend OTP error", error);
+            return sendError(res, 500, "Internal server error while resending OTP");
         }
     },
 
@@ -228,10 +220,9 @@ export const AuthController = {
             const { credential } = req.body;
 
             if (!credential) {
-                return res.status(400).json({ message: "Google credential is required" });
+                return sendError(res, 400, "Google credential is required", "BAD_REQUEST");
             }
 
-            // Verify the Google token
             const ticket = await googleClient.verifyIdToken({
                 idToken: credential,
                 audience: process.env.GOOGLE_CLIENT_ID,
@@ -239,18 +230,15 @@ export const AuthController = {
 
             const payload = ticket.getPayload();
             if (!payload || !payload.email) {
-                return res.status(400).json({ message: "Invalid Google token" });
+                return sendError(res, 400, "Invalid Google token", "BAD_REQUEST");
             }
 
             const { email, name, picture, sub: googleId, email_verified } = payload;
 
-            // Check if user exists
             let user = await UserModel.findOne({ $or: [{ email }, { googleId }] });
 
             if (user) {
-                // Existing user - just log them in
                 if (!user.googleId) {
-                    // Link Google account to existing user
                     user.googleId = googleId;
                     user.authProvider = 'google';
                     user.emailVerified = email_verified || true;
@@ -266,7 +254,7 @@ export const AuthController = {
                 const authPayload: AuthUser = { id: user._id.toString(), email: user.email, role: user.role };
                 const token = jwt.sign(authPayload, jwtSecret, { expiresIn: "7d" });
 
-                return res.status(200).json({
+                return sendSuccess(res, {
                     message: "Login successful",
                     token,
                     user: {
@@ -278,18 +266,17 @@ export const AuthController = {
                     }
                 });
             } else {
-                // New user - account doesn't exist
-                return res.status(404).json({ 
+                return sendSuccess(res, {
                     message: "No account found with this email. Please register first.",
                     requiresRegistration: true,
                     googleEmail: email,
                     googleName: name,
                     googlePicture: picture
-                });
+                }, 404);
             }
         } catch (error) {
-            console.log("Google Sign-In error", error);
-            return res.status(500).json({ message: "Internal server error during Google Sign-In" });
+            logger.error("Google Sign-In error", error);
+            return sendError(res, 500, "Internal server error during Google Sign-In");
         }
     }
 }

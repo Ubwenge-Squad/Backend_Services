@@ -3,29 +3,30 @@ import mongoose from 'mongoose';
 import { ApplicantProfileModel } from '../models/ApplicantProfile.model';
 import { ResumeModel } from '../models/Resume.model';
 import { uploadResumeBuffer } from '../services/cloudinary';
+import { sendSuccess, sendError } from '../utils/response';
 
 export const ResumesController = {
 	async create(req: Request, res: Response): Promise<Response> {
 		const uploadedFile = req.file;
 		if (!uploadedFile?.buffer) {
-			return res.status(400).json({ message: 'file is required' });
+			return sendError(res, 400, 'file is required', 'BAD_REQUEST');
 		}
 		const bodyApplicant = req.body?.applicant || req.body?.applicantId;
 		let applicantProfileId = bodyApplicant;
 		if (req.user?.role === 'applicant') {
 			const profile = await ApplicantProfileModel.findOne({ user: req.user.id }).lean();
 			if (!profile) {
-				return res.status(400).json({ message: 'Applicant profile not found' });
+				return sendError(res, 400, 'Applicant profile not found', 'BAD_REQUEST');
 			}
 			applicantProfileId = String(profile._id);
 		}
 		if (!applicantProfileId || !mongoose.Types.ObjectId.isValid(applicantProfileId)) {
-			return res.status(400).json({ message: 'Valid applicant is required' });
+			return sendError(res, 400, 'Valid applicant is required', 'BAD_REQUEST');
 		}
 		if (req.user?.role === 'applicant') {
 			const profile = await ApplicantProfileModel.findById(applicantProfileId).lean();
 			if (!profile || String(profile.user) !== req.user.id) {
-				return res.status(403).json({ message: 'Forbidden: you can only upload your own resume' });
+				return sendError(res, 403, 'Forbidden: you can only upload your own resume', 'FORBIDDEN');
 			}
 		}
 		const cloudinaryFile = await uploadResumeBuffer(uploadedFile.buffer, uploadedFile.originalname);
@@ -42,31 +43,31 @@ export const ResumesController = {
 			mimeType: req.body.mimeType || uploadedFile?.mimetype || 'application/pdf',
 			isPrimary
 		});
-		return res.status(201).json(created);
+		return sendSuccess(res, created, 201);
 	},
 
 	async getById(req: Request, res: Response): Promise<Response> {
 		const resumeId = String(req.params.resumeId ?? '');
 		if (!mongoose.Types.ObjectId.isValid(resumeId)) {
-			return res.status(400).json({ message: 'Invalid resumeId' });
+			return sendError(res, 400, 'Invalid resumeId', 'BAD_REQUEST');
 		}
 		const resume = await ResumeModel.findById(resumeId).lean();
 		if (!resume) {
-			return res.status(404).json({ message: 'Resume not found' });
+			return sendError(res, 404, 'Resume not found', 'NOT_FOUND');
 		}
 		if (req.user?.role === 'applicant') {
 			const profile = await ApplicantProfileModel.findById(resume.applicant).lean();
 			if (!profile || String(profile.user) !== req.user.id) {
-				return res.status(403).json({ message: 'Forbidden: you can only view your own resume' });
+				return sendError(res, 403, 'Forbidden: you can only view your own resume', 'FORBIDDEN');
 			}
 		}
-		return res.json(resume);
+		return sendSuccess(res, resume);
 	},
 
 	async parse(req: Request, res: Response): Promise<Response> {
 		const resumeId = String(req.params.resumeId ?? '');
 		if (!mongoose.Types.ObjectId.isValid(resumeId)) {
-			return res.status(400).json({ message: 'Invalid resumeId' });
+			return sendError(res, 400, 'Invalid resumeId', 'BAD_REQUEST');
 		}
 		const parseVersion = (req.body?.parseVersion as string) || 'v1';
 		const updated = await ResumeModel.findByIdAndUpdate(
@@ -79,8 +80,8 @@ export const ResumesController = {
 			{ new: true, runValidators: true }
 		).lean();
 		if (!updated) {
-			return res.status(404).json({ message: 'Resume not found' });
+			return sendError(res, 404, 'Resume not found', 'NOT_FOUND');
 		}
-		return res.json(updated);
+		return sendSuccess(res, updated);
 	}
 };

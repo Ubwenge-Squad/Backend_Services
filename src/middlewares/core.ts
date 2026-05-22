@@ -1,19 +1,28 @@
 import { Express, Request, Response, NextFunction } from 'express';
+import { logger } from '../utils/logger';
 
 export function registerCoreMiddlewares(app: Express): void {
-	// Simple request id and timing
+	// Request timing
 	app.use((req: Request, _res: Response, next: NextFunction) => {
 		(req as any).reqStart = Date.now();
 		next();
 	});
 
-	// Global error handler placeholder
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-		console.error(err);
-		const isProduction = process.env.NODE_ENV === 'production';
-		const message = isProduction ? 'Internal Server Error' : err.message || 'Internal Server Error';
-		res.status(err.status || 500).json({ message });
+	// Response timing logger
+	app.use((req: Request, res: Response, next: NextFunction) => {
+		const originalEnd = res.end.bind(res);
+		res.end = function (this: Response, ...args: any[]) {
+			const duration = Date.now() - ((req as any).reqStart || Date.now());
+			logger.debug(`${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
+			return originalEnd(...args);
+		} as any;
+		next();
 	});
 }
 
+// Wrapper for async route handlers to avoid try/catch repetition
+export function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) {
+	return (req: Request, res: Response, next: NextFunction) => {
+		Promise.resolve(fn(req, res, next)).catch(next);
+	};
+}

@@ -10,6 +10,8 @@ import { UserModel } from '../models/User.model';
 import { ApplicantProfileModel } from '../models/ApplicantProfile.model';
 import { ApplicationModel } from '../models/Application.model';
 import { normalizeApplicantFromExternal } from '../ai/normalized';
+import { sendError, sendSuccess } from '../utils/response';
+import { logger } from '../utils/logger';
 
 function computeCompleteness(n: { skills: any[]; experience: any[]; education: any[]; projects: any[] }): number {
 	let score = 0;
@@ -108,19 +110,19 @@ export const IngestionController = {
 		const jobId = String(req.body?.jobId ?? '');
 		const profiles = Array.isArray(req.body?.profiles) ? req.body.profiles : [];
 		if (!jobId || !mongoose.Types.ObjectId.isValid(jobId)) {
-			return res.status(400).json({ message: 'Valid jobId is required' });
+			return sendError(res, 400, 'Valid jobId is required', 'BAD_REQUEST');
 		}
 		if (!profiles.length) {
-			return res.status(400).json({ message: 'profiles array is required' });
+			return sendError(res, 400, 'profiles array is required', 'BAD_REQUEST');
 		}
 		const job = await JobModel.findById(jobId).lean();
-		if (!job) return res.status(404).json({ message: 'Job not found' });
+		if (!job) return sendError(res, 404, 'Job not found', 'NOT_FOUND');
 
 		if (req.user?.role === 'recruiter') {
 			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user.id }).lean();
-			if (!recruiterProfile) return res.status(400).json({ message: 'Recruiter profile not found' });
+			if (!recruiterProfile) return sendError(res, 400, 'Recruiter profile not found', 'BAD_REQUEST');
 			if (String(job.recruiter) !== String(recruiterProfile._id)) {
-				return res.status(403).json({ message: 'Forbidden: you can only ingest for your own jobs' });
+				return sendError(res, 403, 'Forbidden: you can only ingest for your own jobs', 'FORBIDDEN');
 			}
 		}
 
@@ -197,32 +199,31 @@ export const IngestionController = {
 			}
 		}
 
-		return res.status(202).json({ jobId, acceptedRows, rejectedRows });
+		return sendSuccess(res, { jobId, acceptedRows, rejectedRows }, 202);
 	},
 
 	async ingestCsv(req: Request, res: Response): Promise<Response> {
 		try {
 		if (!req.file) {
-			return res.status(400).json({ message: 'CSV file is required' });
+			return sendError(res, 400, 'CSV file is required', 'BAD_REQUEST');
 		}
 		const jobId = String(req.body?.jobId ?? '');
 		if (!jobId || !mongoose.Types.ObjectId.isValid(jobId)) {
-			return res.status(400).json({ message: 'Valid jobId is required' });
+			return sendError(res, 400, 'Valid jobId is required', 'BAD_REQUEST');
 		}
 
 		const job = await JobModel.findById(jobId).lean();
 		if (!job) {
-			return res.status(404).json({ message: 'Job not found' });
+			return sendError(res, 404, 'Job not found', 'NOT_FOUND');
 		}
 
-		// Enforce ownership for recruiters (admins can ingest for any job).
 		if (req.user?.role === 'recruiter') {
 			const recruiterProfile = await RecruiterProfileModel.findOne({ user: req.user.id }).lean();
 			if (!recruiterProfile) {
-				return res.status(400).json({ message: 'Recruiter profile not found' });
+				return sendError(res, 400, 'Recruiter profile not found', 'BAD_REQUEST');
 			}
 			if (String(job.recruiter) !== String(recruiterProfile._id)) {
-				return res.status(403).json({ message: 'Forbidden: you can only ingest for your own jobs' });
+				return sendError(res, 403, 'Forbidden: you can only ingest for your own jobs', 'FORBIDDEN');
 			}
 		}
 
@@ -232,7 +233,7 @@ export const IngestionController = {
 			if (name.endsWith('.xlsx') || name.endsWith('.xls')) rows = parseXlsxBuffer(req.file.buffer);
 			else rows = parseCsvBuffer(req.file.buffer);
 		} catch (e: any) {
-			return res.status(400).json({ message: 'Failed to parse file', details: e?.message ?? String(e) });
+			return sendError(res, 400, 'Failed to parse file', 'BAD_REQUEST', e?.message ?? String(e));
 		}
 
 		let acceptedRows = 0;
@@ -323,10 +324,10 @@ export const IngestionController = {
 			}
 		}
 
-		return res.status(202).json({ jobId, acceptedRows, rejectedRows });
+		return sendSuccess(res, { jobId, acceptedRows, rejectedRows }, 202);
 		} catch (err: any) {
-			console.error('[ingestCsv] unhandled error:', err);
-			return res.status(500).json({ message: err?.message ?? 'Internal server error during ingestion' });
+			logger.error('[ingestCsv] unhandled error', err);
+			return sendError(res, 500, err?.message ?? 'Internal server error during ingestion');
 		}
 	}
 };

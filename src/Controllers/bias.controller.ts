@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { BiasAuditLogModel } from '../models/BiasAuditLog.model';
-import { parsePagination, toPaginatedResponse } from '../utils/pagination';
+import { parsePagination } from '../utils/pagination';
+import { sendSuccess, sendError, sendPaginated } from '../utils/response';
 
 export const BiasController = {
 	async list(req: Request, res: Response): Promise<Response> {
@@ -15,13 +16,13 @@ export const BiasController = {
 			BiasAuditLogModel.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
 			BiasAuditLogModel.countDocuments(query)
 		]);
-		return res.json(toPaginatedResponse(audits, page, limit, total));
+		return sendPaginated(res, audits, page, limit, total);
 	},
 
 	async dismiss(req: Request, res: Response): Promise<Response> {
 		const biasAuditId = String(req.params.biasAuditId ?? '');
 		if (!mongoose.Types.ObjectId.isValid(biasAuditId)) {
-			return res.status(400).json({ message: 'Invalid biasAuditId' });
+			return sendError(res, 400, 'Invalid biasAuditId', 'BAD_REQUEST');
 		}
 		const updated = await BiasAuditLogModel.findByIdAndUpdate(
 			biasAuditId,
@@ -33,8 +34,8 @@ export const BiasController = {
 			{ new: true, runValidators: true }
 		).lean();
 		if (!updated) {
-			return res.status(404).json({ message: 'Bias audit log not found' });
+			return sendError(res, 404, 'Bias audit log not found', 'NOT_FOUND');
 		}
-		return res.json(updated);
+		return sendSuccess(res, updated);
 	}
 };
